@@ -1,4 +1,4 @@
-module Account exposing (Account, decoder, encode, toHtml, toString, urlParser)
+module Account exposing (Account, decoder, encode, toHtml, toString, urlParser, anonymous, create)
 
 import Html exposing (Html)
 import Json.Decode as Decode exposing (Decoder)
@@ -11,6 +11,14 @@ type Account
     = Account String
 
 -- CREATE
+
+create : String -> Account
+create s =
+    (Account s)
+
+anonymous : Account
+anonymous =
+    (Account "")
 
 decoder : Decoder Account
 decoder =

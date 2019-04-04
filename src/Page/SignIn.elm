@@ -7,7 +7,7 @@ import Html.Attributes exposing (..)
 import Html.Events exposing (..)
 import Http
 import Json.Decode as Decode exposing (Decoder, decodeString, field, string)
-import Json.Decode.Pipeline exposing (optional)
+import Json.Decode.Pipeline exposing (optional, required)
 import Json.Encode as Encode
 import Route exposing (Route)
 import Session exposing (Session)
@@ -28,6 +28,8 @@ type alias Form =
     , password : String
     }
 
+type Token = Token String
+
 init : Session -> (Model, Cmd msg)
 init session =
     ( { session = session
@@ -47,8 +49,20 @@ view model =
     { title = "SignIn"
     , content =
         div [ class "cred-page" ]
-            [
-             viewForm model.form
+            [ div [ class "container page" ]
+              [ div [ class "row" ]
+                [ div [class "col-md-6 offset-md-3 col-xs-12" ]
+                  [ h1 [ class "text-xs-center" ] [ text "Sign in" ]
+                  , p [ class "text-xs-center" ]
+                      [ a [ href "#TODo" ]
+                        [ text "Sign up" ]
+                      ]
+                  , ul [ class "error-messages" ]
+                      (List.map viewProblem model.problems)
+                  , viewForm model.form
+                  ]
+                ]
+              ]
             ]
     }
 
@@ -95,7 +109,7 @@ type Msg
     = SubmittedForm
     | EnteredAccount String
     | EnteredPassword String
-    | CompletedSignIn (Result Http.Error Viewer)
+    | CompletedSignIn (Result Http.Error Token)
     | GotSession Session
 
 update : Msg -> Model -> ( Model, Cmd Msg)
@@ -126,9 +140,10 @@ update msg model =
                 ({ model | problems = List.append model.problems serverErrors }
                 , Cmd.none
                 )
-        CompletedSignIn (Ok viewer) ->
+        CompletedSignIn (Ok token) ->
             ( model
-            , Viewer.store viewer
+            , Viewer.store (Viewer.create model.form.account
+                                (case token of (Token t) -> t))
             )
         GotSession session ->
             ( { model | session = session }
@@ -144,6 +159,13 @@ updateForm transform model =
 subscriptions : Model -> Sub Msg
 subscriptions model =
     Session.changes GotSession (Session.navKey model.session)
+
+-- SERIALIZATION
+
+tokenDecoder : Decoder Token
+tokenDecoder =
+    Decode.succeed Token
+        |> required "token" Decode.string
 
 -- FORM
 
@@ -198,7 +220,7 @@ trimFields form =
 
 -- HTTP
 
-signIn : TrimmedForm -> Http.Request Viewer
+signIn : TrimmedForm -> Http.Request Token
 signIn (Trimmed form) =
     let
         body =
@@ -208,7 +230,7 @@ signIn (Trimmed form) =
                 ]
                 |> Http.jsonBody
     in
-        Api.signIn body Viewer.decoder
+        Api.signIn body tokenDecoder
 
 -- EXPORT
 

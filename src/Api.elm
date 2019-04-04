@@ -1,4 +1,4 @@
-port module Api exposing (Cred, addServerError, application, decodeErrors, delete, get, signIn, signOut, post, put, storeCredWith, account, viewerChanges)
+port module Api exposing (Cred, credFromToken, addServerError, application, decodeErrors, delete, get, signIn, signOut, post, put, storeCredWith, viewerChanges)
 
 {-| This module is responsible for communicating to the Conduit API.
 It exposes an opaque Endpoint type which is guaranteed to point to the correct URL.
@@ -30,16 +30,14 @@ This token should never be rendered to the end user, and with this API, it
 can't be!
 -}
 type Cred
-    = Cred Account String
+    = Cred String
 
-
-account : Cred -> Account
-account (Cred val _) =
-    val
-
+credFromToken : String -> Cred
+credFromToken token =
+    (Cred token)
 
 credHeader : Cred -> Http.Header
-credHeader (Cred _ str) =
+credHeader (Cred str) =
     Http.header "authorization" ("Bearer " ++ str)
 
 
@@ -51,13 +49,10 @@ or was passed in via flags.
 credDecoder : Decoder Cred
 credDecoder =
     Decode.succeed Cred
-        |> required "account" Account.decoder
         |> required "token" Decode.string
 
 
-
 -- PERSISTENCE
-
 
 decode : Decoder (Cred -> viewer) -> Value -> Result Decode.Error viewer
 decode decoder value =
@@ -65,7 +60,7 @@ decode decoder value =
     -- first decode the Value as a String, then
     -- decode that String as JSON.
     Decode.decodeValue Decode.string value
-        |> Result.andThen (\str -> Decode.decodeString (Decode.field "user" (decoderFromCred decoder)) str)
+        |> Result.andThen (\str -> Decode.decodeString (decoderFromCred decoder) str)
 
 
 port onStoreChange : (Value -> msg) -> Sub msg
@@ -85,8 +80,8 @@ decodeFromChange viewerDecoder val =
         |> Result.toMaybe
 
 
-storeCredWith : Cred -> Cmd msg
-storeCredWith (Cred acc token) =
+storeCredWith : Cred -> Account -> Cmd msg
+storeCredWith (Cred token) acc =
     let
         json =
             Encode.object
@@ -145,7 +140,7 @@ application viewerDecoder config =
 
 storageDecoder : Decoder (Cred -> viewer) -> Decoder viewer
 storageDecoder viewerDecoder =
-    Decode.field "user" (decoderFromCred viewerDecoder)
+    decoderFromCred viewerDecoder
 
 
 
@@ -159,8 +154,6 @@ get url maybeCred decoder =
         , url = url
         , expect = Http.expectJson decoder
         , headers =
-            Http.header "Content-Type" "application/json"
-            ::
             Http.header "Accept" "application/json"
             ::
             case maybeCred of
@@ -222,9 +215,9 @@ delete url cred body decoder =
         }
 
 
-signIn : Http.Body -> Decoder (Cred -> a) -> Http.Request a
+signIn : Http.Body -> Decoder a -> Http.Request a
 signIn body decoder =
-    post Endpoint.signIn Nothing body (Decode.field "account" (decoderFromCred decoder))
+    post Endpoint.signIn Nothing body decoder
 
 
 decoderFromCred : Decoder (Cred -> a) -> Decoder a

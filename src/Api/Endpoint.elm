@@ -1,4 +1,4 @@
-module Api.Endpoint exposing (Endpoint, signIn, signUp, request)
+module Api.Endpoint exposing (Endpoint, signIn, signUp, user, request)
 
 import Http
 import Url.Builder exposing (QueryParameter)
@@ -62,6 +62,11 @@ url paths queryParams =
 signIn : Endpoint
 signIn =
     url [ "sign_in" ] []
+
+
+user : Account -> Endpoint
+user acc =
+    url [ "user", Account.toString acc ] []
 
 signUp : Endpoint
 signUp =

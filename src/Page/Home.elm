@@ -13,18 +13,20 @@ import Session exposing (Session)
 import Task exposing (Task)
 import Time
 import Url.Builder
+import User exposing (User)
 import Account exposing (Account)
+import Viewer
 
 -- MODEL
 
 type alias Model =
     { session : Session
     , timeZone : Time.Zone
+    , user: Status User
     }
 
 type Status a
     = Loading
-    | LoadingSlowly
     | Loaded a
     | Failed
 
@@ -32,9 +34,12 @@ init : Session -> ( Model, Cmd Msg )
 init session =
     ( { session = session
       , timeZone = Time.utc
+      , user = Loading
       }
     , Cmd.batch
         [ Task.perform GotTimeZone Time.here
+        , fetchUser session
+            |> Task.attempt CompletedUserLoad
         ]
     )
 
@@ -49,6 +54,15 @@ view model =
             , div [ class "container page" ]
                 [ div [ class "row" ]
                   [ text "bouncr" ]
+                , div [ class "row" ] <|
+                    case model.user of
+                        Loading -> []
+                        Loaded user ->
+                            [ div [ ]
+                              [ text (Account.toString user.account) ]
+                            ]
+                        Failed ->
+                            [ Loading.error "user" ]
                 ]
             ]
     }
@@ -62,19 +76,48 @@ viewBanner =
           ]
         ]
 
+-- HTTP
+
+fetchUser: Session -> Task Http.Error User
+fetchUser session =
+    let
+        maybeCred =
+            Session.cred session
+
+        maybeViewer =
+            Session.viewer session
+
+        account =
+            case maybeViewer of
+                Just viewer -> (Viewer.account viewer)
+                Nothing -> (Account.anonymous)
+
+        request =
+            User.fetch account maybeCred
+    in
+        Http.toTask request
+
 -- UPDATE
 
 type Msg
     = GotTimeZone Time.Zone
     | GotSession Session
+    | CompletedUserLoad (Result Http.Error User)
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         GotTimeZone tz ->
             ( { model | timeZone = tz }, Cmd.none )
+
         GotSession session ->
             ( { model | session = session }, Cmd.none )
+
+        CompletedUserLoad (Ok user) ->
+            ( { model | user = Loaded user }, Cmd.none )
+
+        CompletedUserLoad (Err err) ->
+            ( { model | user = Failed }, Cmd.none )
 
 -- SUBSCRIPTIONS
 

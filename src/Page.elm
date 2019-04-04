@@ -56,8 +56,8 @@ viewMenu page maybeViewer =
     case maybeViewer of
         Just viewer ->
             let
-                account =
-                    Viewer.account viewer
+                cred =
+                    Viewer.cred viewer
             in
                 [ linkTo Route.SignOut [ text "Sign out" ] ]
 
