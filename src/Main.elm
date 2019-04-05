@@ -10,6 +10,7 @@ import Page.Blank as Blank
 import Page.NotFound as NotFound
 import Page.Home as Home
 import Page.SignIn as SignIn
+import Page.UserAdmin as UserAdmin
 import Route exposing (Route)
 import Session exposing (Session)
 import Task
@@ -23,6 +24,7 @@ type Model
     | NotFound Session
     | Home Home.Model
     | SignIn SignIn.Model
+    | UserAdmin UserAdmin.Model
 
 -- MODEL
 
@@ -58,6 +60,9 @@ view model =
             SignIn signIn ->
                 viewPage Page.Other GotSignInMsg (SignIn.view signIn)
 
+            UserAdmin userAdmin ->
+                viewPage Page.Other GotUserAdminMsg (UserAdmin.view userAdmin)
+
 -- UPDATE
 
 type Msg
@@ -67,6 +72,7 @@ type Msg
     | ClickedLink Browser.UrlRequest
     | GotHomeMsg Home.Msg
     | GotSignInMsg SignIn.Msg
+    | GotUserAdminMsg UserAdmin.Msg
     | GotSession Session
 
 toSession : Model -> Session
@@ -83,6 +89,9 @@ toSession page =
 
         SignIn signIn ->
             SignIn.toSession signIn
+
+        UserAdmin userAdmin ->
+            UserAdmin.toSession userAdmin
 
 changeRouteTo : Maybe Route -> Model -> ( Model, Cmd Msg )
 changeRouteTo maybeRoute model =
@@ -107,6 +116,11 @@ changeRouteTo maybeRoute model =
             Just Route.SignIn ->
                 SignIn.init session
                     |> updateWith SignIn GotSignInMsg model
+
+            Just Route.UserAdmin ->
+                UserAdmin.init session
+                    |> updateWith UserAdmin GotUserAdminMsg model
+
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
@@ -141,6 +155,10 @@ update msg model =
             Home.update subMsg home
                 |> updateWith Home GotHomeMsg model
 
+        ( GotUserAdminMsg subMsg, UserAdmin userAdmin ) ->
+            UserAdmin.update subMsg userAdmin
+                |> updateWith UserAdmin GotUserAdminMsg model
+
         ( GotSession session, Redirect _ ) ->
             (Redirect session
             , Route.replaceUrl (Session.navKey session) Route.Home
@@ -172,6 +190,8 @@ subscriptions model =
         SignIn signIn ->
             Sub.map GotSignInMsg (SignIn.subscriptions signIn)
 
+        UserAdmin userAdmin ->
+            Sub.map GotUserAdminMsg (UserAdmin.subscriptions userAdmin)
 
 -- MAIN
 

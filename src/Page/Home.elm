@@ -9,10 +9,11 @@ import Html.Events exposing (onClick)
 import Http
 import Loading
 import Page
+import Route exposing (Route)
 import Session exposing (Session)
 import Task exposing (Task)
 import Time
-import Url.Builder
+import Url.Builder exposing (string)
 import User exposing (User)
 import Account exposing (Account)
 import Viewer
@@ -59,13 +60,70 @@ view model =
                         Loading -> []
                         Loaded user ->
                             [ div [ ]
-                              [ text (Account.toString user.account) ]
+                              [ text (Account.toString user.account)
+                              , div [] (List.map viewPermission user.permissions)
+                              , div [] <|
+                                  List.concat
+                                      [ viewUserAdmin user.permissions
+                                      , viewGroupAdmin user.permissions
+                                      , viewApplicationAdmin user.permissions
+                                      , viewRoleAdmin user.permissions
+                                      , viewPermissionAdmin user.permissions
+                                      ]
+
+
+                              ]
+
                             ]
                         Failed ->
                             [ Loading.error "user" ]
                 ]
             ]
     }
+
+viewPermission : String -> Html Msg
+viewPermission permission =
+    text permission
+
+viewUserAdmin : List String -> List (Html Msg)
+viewUserAdmin permissions =
+    if List.any (\a -> a == "any_user:read" || a == "user:read")  permissions then
+        [li []
+             [a [ Route.href Route.UserAdmin ] [ text "User"]]]
+    else
+        []
+
+viewGroupAdmin : List String -> List (Html Msg)
+viewGroupAdmin permissions =
+    if List.any (\a -> a == "any_group:read" || a == "group:read")  permissions then
+        [li []
+             [a [] [ text "Group"]]]
+    else
+        []
+
+viewApplicationAdmin : List String -> List (Html Msg)
+viewApplicationAdmin permissions =
+    if List.any (\a -> a == "any_application:read" || a == "application:read")  permissions then
+        [li []
+             [a [] [ text "Application"]]]
+    else
+        []
+
+viewRoleAdmin : List String -> List (Html Msg)
+viewRoleAdmin permissions =
+    if List.any (\a -> a == "any_role:read" || a == "role:read")  permissions then
+        [li []
+             [a [] [ text "Role"]]]
+    else
+        []
+
+viewPermissionAdmin : List String -> List (Html Msg)
+viewPermissionAdmin permissions =
+    if List.any (\a -> a == "any_permission:read" || a == "permission:read")  permissions then
+        [li []
+             [a [] [ text "Permission"]]]
+    else
+        []
 
 viewBanner : Html msg
 viewBanner =
@@ -91,11 +149,15 @@ fetchUser session =
             case maybeViewer of
                 Just viewer -> (Viewer.account viewer)
                 Nothing -> (Account.anonymous)
-
-        request =
-            User.fetch account maybeCred
     in
-        Http.toTask request
+        Http.task
+            { method = "GET"
+            , headers = Api.headers maybeCred
+            , url = Api.url ["user", Account.toString account] [ string "embed" "(permissions,groups)" ]
+            , body = Http.emptyBody
+            , resolver = Api.jsonResolver User.decoder
+            , timeout = Nothing
+            }
 
 -- UPDATE
 
@@ -117,7 +179,16 @@ update msg model =
             ( { model | user = Loaded user }, Cmd.none )
 
         CompletedUserLoad (Err err) ->
-            ( { model | user = Failed }, Cmd.none )
+            case err of
+                Http.BadStatus status ->
+                    case status of
+                        401 ->
+                            ( { model | user = Failed }, Cmd.none )
+                        _ ->
+                            ( { model | user = Failed }, Cmd.none )
+                _ ->
+                    ( { model | user = Failed }, Cmd.none )
+
 
 -- SUBSCRIPTIONS
 

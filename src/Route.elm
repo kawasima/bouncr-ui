@@ -16,7 +16,7 @@ type Route
     | Root
     | SignIn
     | SignOut
-
+    | UserAdmin
 
 parser : Parser (Route -> a) a
 parser =
@@ -24,12 +24,12 @@ parser =
         [ Parser.map Home Parser.top
         , Parser.map SignIn (s "sign_in")
         , Parser.map SignOut (s "sign_out")
+        , Parser.map UserAdmin (s "user_admin")
         ]
 
 
 
 -- PUBLIC HELPERS
-
 
 href : Route -> Attribute msg
 href targetRoute =
@@ -53,7 +53,6 @@ fromUrl url =
 
 -- INTERNAL
 
-
 routeToString : Route -> String
 routeToString page =
     let
@@ -70,5 +69,8 @@ routeToString page =
 
                 SignOut ->
                     [ "sign_out" ]
+
+                UserAdmin ->
+                    [ "user_admin" ]
     in
     "#/" ++ String.join "/" pieces

@@ -1,4 +1,4 @@
-module User exposing (User, fetch, decoder)
+module User exposing (User, decoder)
 
 import Api exposing (Cred)
 import Api.Endpoint as Endpoint
@@ -6,7 +6,7 @@ import Http
 import Session exposing (Session)
 import Dict exposing (Dict)
 import Json.Decode as Decode exposing (Decoder)
-import Json.Decode.Pipeline exposing (required)
+import Json.Decode.Pipeline exposing (required, optional)
 import Json.Encode as Encode
 
 import Account exposing (Account)
@@ -18,13 +18,8 @@ type alias User =
     , account : Account
     , email : String
     , name : String
+    , permissions : List String
     }
-
--- HTTP
-
-fetch : Account -> Maybe Cred -> Http.Request User
-fetch acc maybeCred =
-    Api.get (Endpoint.user acc) maybeCred decoder
 
 -- SERIALIZATION
 
@@ -35,3 +30,4 @@ decoder =
         |> required "account" (Account.decoder)
         |> required "email" Decode.string
         |> required "name" Decode.string
+        |> optional "permissions" (Decode.list Decode.string) []

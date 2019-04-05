@@ -11,6 +11,7 @@ import Json.Decode.Pipeline exposing (optional, required)
 import Json.Encode as Encode
 import Route exposing (Route)
 import Session exposing (Session)
+import Task exposing (Task)
 import Viewer exposing (Viewer)
 
 type alias Model =
@@ -119,7 +120,7 @@ update msg model =
             case validate model.form of
                 Ok validForm ->
                     ( { model | problems = [] }
-                    , Http.send CompletedSignIn (signIn validForm)
+                    , Task.attempt CompletedSignIn (signIn validForm)
                     )
                 Err problems ->
                     ( { model | problems = problems }
@@ -132,14 +133,15 @@ update msg model =
             updateForm (\form -> { form | password = password }) model
 
         CompletedSignIn (Err error) ->
-            let
-                serverErrors =
-                    Api.decodeErrors error
-                        |> List.map ServerError
-            in
-                ({ model | problems = List.append model.problems serverErrors }
-                , Cmd.none
-                )
+            case error of
+                Http.BadStatus status ->
+                    case status of
+                        401 ->
+                            ( { model | problems = [] }, Cmd.none )
+                        _ ->
+                            ( { model | problems = [] }, Cmd.none )
+                _ ->
+                    ( { model | problems = [] }, Cmd.none )
         CompletedSignIn (Ok token) ->
             ( model
             , Viewer.store (Viewer.create model.form.account
@@ -220,7 +222,7 @@ trimFields form =
 
 -- HTTP
 
-signIn : TrimmedForm -> Http.Request Token
+signIn : TrimmedForm -> Task Http.Error Token
 signIn (Trimmed form) =
     let
         body =
@@ -230,7 +232,14 @@ signIn (Trimmed form) =
                 ]
                 |> Http.jsonBody
     in
-        Api.signIn body tokenDecoder
+        Http.task
+            { method = "POST"
+            , headers = [ Http.header "Accept" "application/json" ]
+            , url = Api.url ["sign_in"] []
+            , body = body
+            , resolver = Api.jsonResolver tokenDecoder
+            , timeout = Nothing
+            }
 
 -- EXPORT
 

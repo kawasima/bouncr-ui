@@ -1,7 +1,7 @@
-module Api.Endpoint exposing (Endpoint, signIn, signUp, user, request)
+module Api.Endpoint exposing (Endpoint, url)
 
 import Http
-import Url.Builder exposing (QueryParameter)
+import Url.Builder exposing (QueryParameter, string)
 import Account exposing (Account)
 
 
@@ -9,14 +9,15 @@ import Account exposing (Account)
 -}
 request :
     { body : Http.Body
-    , expect : Http.Expect a
+    , expect : Http.Expect msg
     , headers : List Http.Header
     , method : String
     , timeout : Maybe Float
+    , tracker : Maybe String
     , url : Endpoint
-    , withCredentials : Bool
     }
-    -> Http.Request a
+    -> Cmd msg
+
 request config =
     Http.request
         { body = config.body
@@ -24,8 +25,8 @@ request config =
         , headers = config.headers
         , method = config.method
         , timeout = config.timeout
+        , tracker = config.tracker
         , url = unwrap config.url
-        , withCredentials = config.withCredentials
         }
 
 
@@ -45,29 +46,15 @@ unwrap (Endpoint str) =
     str
 
 
-url : List String -> List QueryParameter -> Endpoint
+url : List String -> List QueryParameter -> String
 url paths queryParams =
-    -- NOTE: Url.Builder takes care of percent-encoding special URL characters.
-    -- See https://package.elm-lang.org/packages/elm/url/latest/Url#percentEncode
     Url.Builder.crossOrigin "http://localhost:3000"
         ("bouncr" :: "api" :: paths)
         queryParams
-        |> Endpoint
-
-
 
 -- ENDPOINTS
 
 
-signIn : Endpoint
-signIn =
-    url [ "sign_in" ] []
-
-
-user : Account -> Endpoint
-user acc =
-    url [ "user", Account.toString acc ] []
-
-signUp : Endpoint
-signUp =
-    url [ "sign_in" ] []
+-- user : Account -> Endpoint
+-- user acc =
+--    url [ "user", Account.toString acc ] [ string "embed" "(permissions,groups)"]

@@ -1,10 +1,6 @@
-port module Api exposing (Cred, credFromToken, addServerError, application, decodeErrors, delete, get, signIn, signOut, post, put, storeCredWith, viewerChanges)
+port module Api exposing (Cred, url, headers, credFromToken, addServerError, application, signOut, storeCredWith, viewerChanges, jsonResolver)
 
-{-| This module is responsible for communicating to the Conduit API.
-It exposes an opaque Endpoint type which is guaranteed to point to the correct URL.
--}
-
-import Api.Endpoint as Endpoint exposing (Endpoint)
+import Url.Builder exposing (QueryParameter, string)
 import Browser
 import Browser.Navigation as Nav
 import Http exposing (Body, Expect)
@@ -14,7 +10,13 @@ import Json.Encode as Encode
 import Url exposing (Url)
 import Account exposing (Account)
 
+-- URL
 
+url : List String -> List QueryParameter -> String
+url paths queryParams =
+    Url.Builder.crossOrigin "http://localhost:3000"
+        ("bouncr" :: "api" :: paths)
+        queryParams
 
 -- CRED
 
@@ -40,6 +42,17 @@ credHeader : Cred -> Http.Header
 credHeader (Cred str) =
     Http.header "authorization" ("Bearer " ++ str)
 
+headers : Maybe Cred -> List Http.Header
+headers maybeCred =
+    List.concat
+        [
+         [ Http.header "accept" "application/json"
+         , Http.header "content-type" "application/json"
+         ]
+        , case maybeCred of
+              Just cred -> [ credHeader cred ]
+              Nothing -> []
+        ]
 
 {-| It's important that this is never exposed!
 We epxose `login` and `application` instead, so we can be certain that if anyone
@@ -119,14 +132,14 @@ application :
 
 application viewerDecoder config =
     let
-        init flags url navKey =
+        init flags u navKey =
             let
                 maybeViewer =
                     Decode.decodeValue Decode.string flags
                         |> Result.andThen (Decode.decodeString (storageDecoder viewerDecoder))
                         |> Result.toMaybe
             in
-            config.init maybeViewer url navKey
+            config.init maybeViewer u navKey
     in
     Browser.application
         { init = init
@@ -146,86 +159,36 @@ storageDecoder viewerDecoder =
 
 -- HTTP
 
-
-get : Endpoint -> Maybe Cred -> Decoder a -> Http.Request a
-get url maybeCred decoder =
-    Endpoint.request
-        { method = "GET"
-        , url = url
-        , expect = Http.expectJson decoder
-        , headers =
-            Http.header "Accept" "application/json"
-            ::
-            case maybeCred of
-                Just cred ->
-                    [ credHeader cred ]
-
-                Nothing ->
-                    []
-        , body = Http.emptyBody
-        , timeout = Nothing
-        , withCredentials = False
-        }
-
-
-put : Endpoint -> Cred -> Body -> Decoder a -> Http.Request a
-put url cred body decoder =
-    Endpoint.request
-        { method = "PUT"
-        , url = url
-        , expect = Http.expectJson decoder
-        , headers = [ credHeader cred ]
-        , body = body
-        , timeout = Nothing
-        , withCredentials = False
-        }
-
-
-post : Endpoint -> Maybe Cred -> Body -> Decoder a -> Http.Request a
-post url maybeCred body decoder =
-    Endpoint.request
-        { method = "POST"
-        , url = url
-        , expect = Http.expectJson decoder
-        , headers =
-            Http.header "Accept" "application/json"
-            ::
-            case maybeCred of
-                Just cred ->
-                    [ credHeader cred ]
-
-                Nothing ->
-                    []
-        , body = body
-        , timeout = Nothing
-        , withCredentials = False
-        }
-
-
-delete : Endpoint -> Cred -> Body -> Decoder a -> Http.Request a
-delete url cred body decoder =
-    Endpoint.request
-        { method = "DELETE"
-        , url = url
-        , expect = Http.expectJson decoder
-        , headers = [ credHeader cred ]
-        , body = body
-        , timeout = Nothing
-        , withCredentials = False
-        }
-
-
-signIn : Http.Body -> Decoder a -> Http.Request a
-signIn body decoder =
-    post Endpoint.signIn Nothing body decoder
-
-
 decoderFromCred : Decoder (Cred -> a) -> Decoder a
 decoderFromCred decoder =
     Decode.map2 (\fromCred cred -> fromCred cred)
         decoder
         credDecoder
 
+jsonResolver : Decoder a -> Http.Resolver Http.Error a
+jsonResolver decoder =
+    Http.stringResolver <|
+        \response ->
+            case response of
+                Http.BadUrl_ u ->
+                    Err (Http.BadUrl u)
+
+                Http.Timeout_ ->
+                    Err Http.Timeout
+
+                Http.NetworkError_ ->
+                    Err Http.NetworkError
+
+                Http.BadStatus_ metadata body ->
+                    Err (Http.BadStatus metadata.statusCode)
+
+                Http.GoodStatus_ metadata body ->
+                    case Decode.decodeString decoder body of
+                        Ok value ->
+                            Ok value
+
+                        Err err ->
+                            Err (Http.BadBody (Decode.errorToString err))
 
 
 -- ERRORS
@@ -238,18 +201,6 @@ addServerError list =
 
 {-| Many API endpoints include an "errors" field in their BadStatus responses.
 -}
-decodeErrors : Http.Error -> List String
-decodeErrors error =
-    case error of
-        Http.BadStatus response ->
-            response.body
-                |> decodeString (field "errors" errorsDecoder)
-                |> Result.withDefault [ "Server error" ]
-
-        err ->
-            [ "Server error" ]
-
-
 errorsDecoder : Decoder (List String)
 errorsDecoder =
     Decode.keyValuePairs (Decode.list Decode.string)
