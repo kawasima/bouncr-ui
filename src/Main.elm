@@ -1,19 +1,23 @@
 module Main exposing (main)
 
-import Api exposing (Cred)
+import Api exposing (Cred, MaybeSuccess(..))
 import Browser exposing (Document)
 import Browser.Navigation as Nav
 import Html exposing (..)
+import Http
 import Json.Decode as Decode exposing (Value)
 import Page exposing (Page)
 import Page.Blank as Blank
 import Page.NotFound as NotFound
 import Page.Home as Home
 import Page.SignIn as SignIn
+import Page.SignUp as SignUp
+import Page.ChangePassword as ChangePassword
 import Page.UserAdmin as UserAdmin
+import Page.PermissionAdmin as PermissionAdmin
 import Route exposing (Route)
 import Session exposing (Session)
-import Task
+import Task exposing (Task)
 import Time
 import Url exposing (Url)
 import Account exposing (Account)
@@ -24,7 +28,10 @@ type Model
     | NotFound Session
     | Home Home.Model
     | SignIn SignIn.Model
+    | SignUp SignUp.Model
+    | ChangePassword ChangePassword.Model
     | UserAdmin UserAdmin.Model
+    | PermissionAdmin PermissionAdmin.Model
 
 -- MODEL
 
@@ -60,8 +67,37 @@ view model =
             SignIn signIn ->
                 viewPage Page.Other GotSignInMsg (SignIn.view signIn)
 
+            SignUp signUp ->
+                viewPage Page.Other GotSignUpMsg (SignUp.view signUp)
+
+            ChangePassword changePassword ->
+                viewPage Page.Other GotChangePasswordMsg (ChangePassword.view changePassword)
+
             UserAdmin userAdmin ->
                 viewPage Page.Other GotUserAdminMsg (UserAdmin.view userAdmin)
+
+            PermissionAdmin permissionAdmin ->
+                viewPage Page.Other GotPermissionAdminMsg (PermissionAdmin.view permissionAdmin)
+
+-- HTTP
+
+signOut : Session -> Task Http.Error (Http.Metadata, MaybeSuccess ())
+signOut session =
+    let
+        maybeCred = Session.cred session
+
+        token = case maybeCred of
+                    Just t -> t
+                    Nothing -> Api.credFromToken("dummy") -- FIXME
+    in
+    Http.task
+        { method = "DELETE"
+        , headers = Api.headers maybeCred
+        , url = Api.url ["session", Api.token(token) ] []
+        , body = Http.emptyBody
+        , resolver = Api.jsonResolver (Decode.succeed ())
+        , timeout = Nothing
+        }
 
 -- UPDATE
 
@@ -72,8 +108,12 @@ type Msg
     | ClickedLink Browser.UrlRequest
     | GotHomeMsg Home.Msg
     | GotSignInMsg SignIn.Msg
+    | GotSignUpMsg SignUp.Msg
+    | GotChangePasswordMsg ChangePassword.Msg
     | GotUserAdminMsg UserAdmin.Msg
+    | GotPermissionAdminMsg PermissionAdmin.Msg
     | GotSession Session
+    | SignedOut (Result Http.Error (Http.Metadata, MaybeSuccess ()))
 
 toSession : Model -> Session
 toSession page =
@@ -90,8 +130,17 @@ toSession page =
         SignIn signIn ->
             SignIn.toSession signIn
 
+        SignUp signUp ->
+            SignUp.toSession signUp
+
+        ChangePassword changePassword ->
+            ChangePassword.toSession changePassword
+
         UserAdmin userAdmin ->
             UserAdmin.toSession userAdmin
+
+        PermissionAdmin permissionAdmin ->
+            PermissionAdmin.toSession permissionAdmin
 
 changeRouteTo : Maybe Route -> Model -> ( Model, Cmd Msg )
 changeRouteTo maybeRoute model =
@@ -107,7 +156,7 @@ changeRouteTo maybeRoute model =
                 ( model, Route.replaceUrl (Session.navKey session) Route.Home)
 
             Just Route.SignOut ->
-                ( model, Api.signOut )
+                ( model, Task.attempt SignedOut (signOut session) )
 
             Just Route.Home ->
                 Home.init session
@@ -117,10 +166,21 @@ changeRouteTo maybeRoute model =
                 SignIn.init session
                     |> updateWith SignIn GotSignInMsg model
 
+            Just Route.SignUp ->
+                SignUp.init session
+                    |> updateWith SignUp GotSignUpMsg model
+
+            Just Route.ChangePassword ->
+                ChangePassword.init session
+                    |> updateWith ChangePassword GotChangePasswordMsg model
+
             Just Route.UserAdmin ->
                 UserAdmin.init session
                     |> updateWith UserAdmin GotUserAdminMsg model
 
+            Just Route.PermissionAdmin ->
+                PermissionAdmin.init session
+                    |> updateWith PermissionAdmin GotPermissionAdminMsg model
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
@@ -151,6 +211,14 @@ update msg model =
             SignIn.update subMsg signIn
                 |> updateWith SignIn GotSignInMsg model
 
+        ( GotSignUpMsg subMsg, SignUp signUp ) ->
+            SignUp.update subMsg signUp
+                |> updateWith SignUp GotSignUpMsg model
+
+        ( GotChangePasswordMsg subMsg, ChangePassword changePassword ) ->
+            ChangePassword.update subMsg changePassword
+                |> updateWith ChangePassword GotChangePasswordMsg model
+
         ( GotHomeMsg subMsg, Home home ) ->
             Home.update subMsg home
                 |> updateWith Home GotHomeMsg model
@@ -159,11 +227,18 @@ update msg model =
             UserAdmin.update subMsg userAdmin
                 |> updateWith UserAdmin GotUserAdminMsg model
 
+        ( GotPermissionAdminMsg subMsg, PermissionAdmin permissionAdmin ) ->
+            PermissionAdmin.update subMsg permissionAdmin
+                |> updateWith PermissionAdmin GotPermissionAdminMsg model
+
         ( GotSession session, Redirect _ ) ->
             (Redirect session
             , Route.replaceUrl (Session.navKey session) Route.Home
             )
-
+        ( SignedOut _, _) ->
+            ( model, Cmd.batch
+                  [ Api.signOut
+                  , Route.replaceUrl (Session.navKey (toSession model)) Route.Home ] )
         ( _, _ ) ->
             ( model, Cmd.none )
 
@@ -190,8 +265,17 @@ subscriptions model =
         SignIn signIn ->
             Sub.map GotSignInMsg (SignIn.subscriptions signIn)
 
+        SignUp signUp ->
+            Sub.map GotSignUpMsg (SignUp.subscriptions signUp)
+
+        ChangePassword changePassword ->
+            Sub.map GotChangePasswordMsg (ChangePassword.subscriptions changePassword)
+
         UserAdmin userAdmin ->
             Sub.map GotUserAdminMsg (UserAdmin.subscriptions userAdmin)
+
+        PermissionAdmin permissionAdmin ->
+            Sub.map GotPermissionAdminMsg (PermissionAdmin.subscriptions permissionAdmin)
 
 -- MAIN
 

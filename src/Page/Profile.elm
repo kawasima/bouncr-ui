@@ -17,27 +17,95 @@ import Url exposing (Url)
 
 -- MODEL
 
-type Model
-    = Model Internals
-
-type alias Internals =
-    { session : Session
-    , errors : List String
-    , user : User
-    , isLoading : Bool
+type alias Form =
+    { account : String
+    , name : String
+    , email : String
+    , password : String
     }
 
-init : Session -> User -> Model
-init session user =
-    Model
-        { session = session
-        , errors = []
-        , user = user
-        , isLoading = False
-        }
+type alias SignUpResponse =
+    { account : String
+    , name : String
+    , email : String
+    , password : String
+    }
+
+type Problem
+    = InvalidEntry ValidatedField String
+    | ServerError String
+
+init : Session -> ( Model, Cmd msg )
+init session =
+    ( { session = session
+      , problems = []
+      , form =
+          { account = ""
+          , name = ""
+          , email = ""
+          , password = ""
+          }
+      }
+    , Cmd.none
+    )
 
 -- VIEW
 
-viewUser =
-    div [ class "" ]
-        [ p [] User.account ]
+view : Model -> { title : String, content : Html Msg }
+view model =
+    { title = "Sign Up"
+    , content =
+        div [ class "cred-page" ]
+            [ div [ class "container page" ]
+              [ div [ class "row" ]
+                [ div [ class "col-md-6 offset-md-3 col-xs-12" ]
+                  [ h1 [ class "text-xs-center" ] [ text "Sign up" ]
+                  , p [ class "text-cs-center" ]
+                      [ a [ Route.href Route.SignIn ]
+                        [ text "Hav an account?" ]
+                      ]
+                  , ul [ class "error-messages" ]
+                      (List.map viewProblem model.problems)
+                  , viewForm model.form
+                  ]
+                ]
+              ]
+            ]
+    }
+
+viewForm : Form -> Html Msg
+viewForm form =
+    Html.form [ onSubmit SubmittedForm ]
+        [ fieldset [ class "form-group" ]
+              [ text form.account ]
+        , fieldset [ class "form-group" ]
+              [ input
+                    [ class "form-control form-control-lg"
+                    , placeholder "Name"
+                    , onInput EnteredName
+                    , value form.name
+                    ]
+                    []
+              ]
+        , fieldset [ class "form-group" ]
+              [ input
+                    [ class "form-control form-control-lg"
+                    , placeholder "Email"
+                    , onInput EnteredEmail
+                    , value form.email
+                    ]
+                    []
+              ]
+        , fieldset [ class "form-group" ]
+              [ input
+                    [ class "form-control form-control-lg"
+                    , type_ "password"
+                    , placeholder "Password"
+                    , onInput EnteredPassword
+                    , value form.password
+                    ]
+                    []
+              ]
+        , button [ class "btn btn-lg btn-primary pull-xs-right" ]
+            [ text "Update Profiles" ]
+        ]

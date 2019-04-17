@@ -1,9 +1,5 @@
 module User exposing (User, decoder)
 
-import Api exposing (Cred)
-import Api.Endpoint as Endpoint
-import Http
-import Session exposing (Session)
 import Dict exposing (Dict)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Decode.Pipeline exposing (required, optional)

@@ -1,16 +1,17 @@
 module Page.SignUp exposing (Model, Msg, init, subscriptions, toSession, update, view)
 
-import Api exposing (Cred)
+import Api exposing (Cred, MaybeSuccess(..))
 import Browser.Navigation as Nav
 import Html exposing (..)
 import Html.Attributes exposing (..)
 import Html.Events exposing (..)
 import Http
 import Json.Decode as Decode exposing (Decoder, decodeString, field, string)
-import Json.Decode.Pipeline exposing (optional)
+import Json.Decode.Pipeline exposing (optional, required)
 import Json.Encode as Encode
 import Route exposing (Route)
 import Session exposing (Session)
+import Task exposing (Task)
 import Viewer exposing (Viewer)
 
 -- MODEL
@@ -22,6 +23,13 @@ type alias Model =
     }
 
 type alias Form =
+    { account : String
+    , name : String
+    , email : String
+    , password : String
+    }
+
+type alias SignUpResponse =
     { account : String
     , name : String
     , email : String
@@ -50,7 +58,7 @@ init session =
 
 view : Model -> { title : String, content : Html Msg }
 view model =
-    { title = "Sign In"
+    { title = "Sign Up"
     , content =
         div [ class "cred-page" ]
             [ div [ class "container page" ]
@@ -72,7 +80,7 @@ view model =
 
 viewForm : Form -> Html Msg
 viewForm form =
-    Htlm.form [ onSubmit SubmittedForm ]
+    Html.form [ onSubmit SubmittedForm ]
         [ fieldset [ class "form-group" ]
               [ input
                     [ class "form-control form-control-lg"
@@ -85,9 +93,9 @@ viewForm form =
         , fieldset [ class "form-group" ]
               [ input
                     [ class "form-control form-control-lg"
-                    , placeholder "Email"
-                    , onInput EnteredEmail
-                    , value form.email
+                    , placeholder "Name"
+                    , onInput EnteredName
+                    , value form.name
                     ]
                     []
               ]
@@ -136,7 +144,8 @@ type Msg
     | EnteredName String
     | EnteredEmail String
     | EnteredPassword String
-    | CompletedSignUp (Result Http.Error Viewer)
+    | CompletedSignUp (Result Http.Error (Http.Metadata, MaybeSuccess SignUpResponse))
+    | CompletedChangeInitialPassword (Result Http.Error (Http.Metadata, MaybeSuccess ()))
     | GotSession Session
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -146,7 +155,7 @@ update msg model =
             case validate model.form of
                 Ok validForm ->
                     ( { model | problems = [] }
-                    , Http.send CompletedSignUp (signUp validForm)
+                    , Task.attempt CompletedSignUp (signUp validForm)
                     )
                 Err problems ->
                     ( { model | problems = problems }
@@ -166,22 +175,29 @@ update msg model =
             updateForm (\form -> { form | password = password }) model
 
         CompletedSignUp (Err error) ->
-            let
-                serverErrors =
-                    Api.decodeErrors error
-                        |> List.map ServerError
-            in
-                ( { model | problems = List.append mode.problems serverErrors }
-                , Cmd.none
-                )
+            ( { model | problems = [] }, Cmd.none )
 
-        CompletedSignUp (Ok viewer) ->
-            ( model
-            , Viewer.store viewer)
+        CompletedSignUp (Ok (_, res)) ->
+            case res of
+                Success signUpResponse ->
+                    ( model
+                    , Task.attempt CompletedChangeInitialPassword (changePassword signUpResponse model.form.password))
+                Failure problem ->
+                    ( model, Cmd.none )
+
+        CompletedChangeInitialPassword (Err error) ->
+            ( { model | problems = [] }, Cmd.none )
+
+        CompletedChangeInitialPassword (Ok (_, res)) ->
+            case res of
+                Success signUpResponse ->
+                    ( model, Route.replaceUrl (Session.navKey model.session) Route.SignIn)
+                Failure problem ->
+                    ( model, Cmd.none )
 
         GotSession session ->
             ( { model | session = session }
-            , Route .replaceUrl (Session.navKey session) Route.Home
+            , Route.replaceUrl (Session.navKey session) Route.Home
             )
 
 updateForm : (Form -> Form) -> Model -> ( Model, Cmd Msg )
@@ -242,12 +258,6 @@ validateField (Trimmed form) field =
                 else
                     []
 
-            Account ->
-                if String.isEmpty form.account then
-                    [ "account can't be blank." ]
-                else
-                    []
-
             Email ->
                 if String.isEmpty form.email then
                     [ "email can't be blank." ]
@@ -278,20 +288,52 @@ trimFields form =
         , password = String.trim form.password
         }
 
+-- Decoder
+
+signUpResponseDecoder : Decoder SignUpResponse
+signUpResponseDecoder =
+    Decode.succeed SignUpResponse
+        |> required "account" Decode.string
+        |> required "name" Decode.string
+        |> required "email" Decode.string
+        |> required "password" Decode.string
+
 -- HTTP
 
-signUp : TrimmedForm -> Http.Request Viewer
+signUp : TrimmedForm -> Task Http.Error (Http.Metadata, MaybeSuccess SignUpResponse)
 signUp (Trimmed form) =
     let
-        user =
+        body =
             Encode.object
                 [ ( "account", Encode.string form.account )
                 , ( "name", Encode.string form.name )
                 , ( "email", Encode.string form.email )
-                , ( "password", Encode.string form.password )
-                ]
-
-        body =
-            user |> Http.jsonBody
+                ] |> Http.jsonBody
     in
-        Api.signUp body Viewer.decoder
+        Http.task
+            { method = "POST"
+            , headers = [ Http.header "Accept" "application/json" ]
+            , url = Api.url ["sign_up"] []
+            , body = body
+            , resolver = Api.jsonResolver signUpResponseDecoder
+            , timeout = Nothing
+            }
+
+changePassword : SignUpResponse -> String -> Task Http.Error (Http.Metadata, MaybeSuccess ())
+changePassword signUpResponse newPassword =
+    let
+        body =
+            Encode.object
+                [ ( "account", Encode.string signUpResponse.account )
+                , ( "old_password", Encode.string signUpResponse.password )
+                , ( "new_password", Encode.string newPassword )
+                ] |> Http.jsonBody
+    in
+        Http.task
+            { method = "PUT"
+            , headers = [ Http.header "accept" "application/json" ]
+            , url = Api.url ["password_credential"] []
+            , body = body
+            , resolver = Api.jsonResolver (Decode.succeed ())
+            , timeout = Nothing
+            }

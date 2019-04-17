@@ -10,23 +10,11 @@ import Session exposing (Session)
 import Account exposing (Account)
 import Viewer exposing (Viewer)
 
-
-{-| Determines which navbar link (if any) will be rendered as active.
-Note that we don't enumerate every page here, because the navbar doesn't
-have links for every page. Anything that's not part of the navbar falls
-under Other.
--}
 type Page
     = Other
     | Home
     | SignIn
 
-{-| Take a page's Html and frames it with a header and footer.
-The caller provides the current user, so we can display in either
-"signed in" (rendering username) or "signed out" mode.
-isLoading is for determining whether we should show a loading spinner
-in the header. (This comes up during slow page transitions.)
--}
 view : Maybe Viewer -> Page -> { title : String, content : Html msg } -> Document msg
 view maybeViewer page { title, content } =
     { title = title ++ " - Bouncr"
@@ -46,7 +34,6 @@ viewHeader page maybeViewer =
             ]
         ]
 
-
 viewMenu : Page -> Maybe Viewer -> List (Html msg)
 viewMenu page maybeViewer =
     let
@@ -55,15 +42,9 @@ viewMenu page maybeViewer =
     in
     case maybeViewer of
         Just viewer ->
-            let
-                cred =
-                    Viewer.cred viewer
-            in
-                [ linkTo Route.SignOut [ text "Sign out" ] ]
-
+            [ linkTo Route.SignOut [ text "Sign Out" ]]
         Nothing ->
-            [ linkTo Route.SignIn [ text "Sign in" ]
-            ]
+            [ linkTo Route.SignIn [ text "Sign in" ]]
 
 
 viewFooter : Html msg

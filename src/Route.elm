@@ -16,7 +16,10 @@ type Route
     | Root
     | SignIn
     | SignOut
+    | SignUp
+    | ChangePassword
     | UserAdmin
+    | PermissionAdmin
 
 parser : Parser (Route -> a) a
 parser =
@@ -24,10 +27,11 @@ parser =
         [ Parser.map Home Parser.top
         , Parser.map SignIn (s "sign_in")
         , Parser.map SignOut (s "sign_out")
+        , Parser.map SignUp (s "sign_up")
+        , Parser.map ChangePassword (s "change_password")
         , Parser.map UserAdmin (s "user_admin")
+        , Parser.map PermissionAdmin (s "permission_admin")
         ]
-
-
 
 -- PUBLIC HELPERS
 
@@ -39,7 +43,6 @@ href targetRoute =
 replaceUrl : Nav.Key -> Route -> Cmd msg
 replaceUrl key route =
     Nav.replaceUrl key (routeToString route)
-
 
 fromUrl : Url -> Maybe Route
 fromUrl url =
@@ -70,7 +73,17 @@ routeToString page =
                 SignOut ->
                     [ "sign_out" ]
 
+                SignUp ->
+                    [ "sign_up" ]
+
+                ChangePassword ->
+                    [ "change_password" ]
+
                 UserAdmin ->
                     [ "user_admin" ]
+
+                PermissionAdmin ->
+                    [ "permission_admin" ]
+
     in
     "#/" ++ String.join "/" pieces

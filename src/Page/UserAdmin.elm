@@ -1,6 +1,6 @@
 module Page.UserAdmin exposing (Model, Msg, init, subscriptions, toSession, update, view)
 
-import Api exposing (Cred)
+import Api exposing (Cred, MaybeSuccess(..))
 import Api.Endpoint as Endpoint
 import Browser.Dom as Dom
 import Html exposing (..)
@@ -85,7 +85,7 @@ viewUser user =
 
 -- HTTP
 
-fetchUsers: Session -> Task Http.Error (List User)
+fetchUsers: Session -> Task Http.Error (Http.Metadata, MaybeSuccess (List User))
 fetchUsers session =
     let
         maybeCred =
@@ -108,7 +108,7 @@ fetchUsers session =
 
 type Msg
     = GotSession Session
-    | CompletedUsersLoad (Result Http.Error (List User))
+    | CompletedUsersLoad (Result Http.Error (Http.Metadata, MaybeSuccess (List User)))
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
@@ -116,8 +116,12 @@ update msg model =
         GotSession session ->
             ( { model | session = session }, Cmd.none )
 
-        CompletedUsersLoad (Ok users) ->
-            ( { model | users = Loaded users }, Cmd.none )
+        CompletedUsersLoad (Ok (_, res)) ->
+            case res of
+                Success users ->
+                    ( { model | users = Loaded users }, Cmd.none )
+                Failure problem ->
+                    ( model, Cmd.none )
 
         CompletedUsersLoad (Err err) ->
             ( { model | users = Failed }, Cmd.none )

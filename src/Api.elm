@@ -1,4 +1,4 @@
-port module Api exposing (Cred, url, headers, credFromToken, addServerError, application, signOut, storeCredWith, viewerChanges, jsonResolver)
+port module Api exposing (Cred, MaybeSuccess(..), url, headers, token, credFromToken, addServerError, application, signOut, storeCredWith, viewerChanges, jsonResolver)
 
 import Url.Builder exposing (QueryParameter, string)
 import Browser
@@ -18,6 +18,12 @@ url paths queryParams =
         ("bouncr" :: "api" :: paths)
         queryParams
 
+-- Problem
+
+type alias Problem =
+    { type_ : String
+    , status : Int
+    }
 -- CRED
 
 
@@ -34,9 +40,13 @@ can't be!
 type Cred
     = Cred String
 
+token : Cred -> String
+token (Cred t) =
+    t
+
 credFromToken : String -> Cred
-credFromToken token =
-    (Cred token)
+credFromToken t =
+    (Cred t)
 
 credHeader : Cred -> Http.Header
 credHeader (Cred str) =
@@ -94,12 +104,12 @@ decodeFromChange viewerDecoder val =
 
 
 storeCredWith : Cred -> Account -> Cmd msg
-storeCredWith (Cred token) acc =
+storeCredWith (Cred t) acc =
     let
         json =
             Encode.object
                 [ ( "account", Account.encode acc )
-                , ( "token", Encode.string token )
+                , ( "token", Encode.string t )
                 ]
     in
     storeCache (Just json)
@@ -113,8 +123,6 @@ signOut =
 port storeCache : Maybe Value -> Cmd msg
 
 
-
--- SERIALIZATION
 -- APPLICATION
 
 
@@ -165,7 +173,17 @@ decoderFromCred decoder =
         decoder
         credDecoder
 
-jsonResolver : Decoder a -> Http.Resolver Http.Error a
+problemDecoder : Decoder Problem
+problemDecoder =
+    Decode.succeed Problem
+        |> required "type" Decode.string
+        |> required "status" Decode.int
+
+type MaybeSuccess a
+    = Success a
+    | Failure Problem
+
+jsonResolver : Decoder a -> Http.Resolver Http.Error (Http.Metadata, MaybeSuccess a)
 jsonResolver decoder =
     Http.stringResolver <|
         \response ->
@@ -180,19 +198,22 @@ jsonResolver decoder =
                     Err Http.NetworkError
 
                 Http.BadStatus_ metadata body ->
-                    Err (Http.BadStatus metadata.statusCode)
-
-                Http.GoodStatus_ metadata body ->
-                    case Decode.decodeString decoder body of
+                    case Decode.decodeString problemDecoder body of
                         Ok value ->
-                            Ok value
+                            Ok (metadata, Failure value)
 
                         Err err ->
                             Err (Http.BadBody (Decode.errorToString err))
 
+                Http.GoodStatus_ metadata body ->
+                    case Decode.decodeString decoder body of
+                        Ok value ->
+                            Ok (metadata, Success value)
+
+                        Err err ->
+                            Err (Http.BadBody (Decode.errorToString err))
 
 -- ERRORS
-
 
 addServerError : List String -> List String
 addServerError list =
