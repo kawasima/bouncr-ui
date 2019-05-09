@@ -84,6 +84,11 @@ view model =
                         Otp -> viewOtpForm model.form
                   , hr [] []
                   , viewSignInByOIDC model.nonce model.state
+                  , hr [] []
+                  , p []
+                      [ a [ Route.href Route.ResetPasswordChallenge]
+                        [ text "Forgott password?"]
+                      ]
                   ]
                 ]
               ]

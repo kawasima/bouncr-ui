@@ -167,7 +167,7 @@ viewUserAdmin permissions =
 viewGroupAdmin : List String -> List (Html Msg)
 viewGroupAdmin permissions =
     if List.any (\a -> a == "any_group:read" || a == "group:read")  permissions then
-        [ a [] [ text "Group"]
+        [ a [ Route.href Route.GroupAdmin ] [ text "Group"]
         , br [] []
         ]
     else
@@ -176,7 +176,7 @@ viewGroupAdmin permissions =
 viewApplicationAdmin : List String -> List (Html Msg)
 viewApplicationAdmin permissions =
     if List.any (\a -> a == "any_application:read" || a == "application:read")  permissions then
-        [ a [] [ text "Application"]
+        [ a [ Route.href Route.ApplicationAdmin ] [ text "Application"]
         , br [] []
         ]
 
@@ -186,7 +186,7 @@ viewApplicationAdmin permissions =
 viewRoleAdmin : List String -> List (Html Msg)
 viewRoleAdmin permissions =
     if List.any (\a -> a == "any_role:read" || a == "role:read")  permissions then
-        [ a [] [ text "Role"]
+        [ a [ Route.href Route.RoleAdmin ] [ text "Role"]
         , br [] []
         ]
 

@@ -1,4 +1,4 @@
-module Model.Role exposing (Role, decoder)
+module Model.Group exposing (Group, decoder)
 
 import Json.Decode as Decode exposing (Decoder)
 import Json.Decode.Pipeline exposing (required, optional)
@@ -6,7 +6,7 @@ import Json.Encode as Encode
 
 -- MODEL
 
-type alias Role =
+type alias Group =
     { id : Int
     , name : String
     , description : String
@@ -14,9 +14,9 @@ type alias Role =
 
 -- SERIALIZATION
 
-decoder : Decoder Role
+decoder : Decoder Group
 decoder =
-    Decode.succeed Role
+    Decode.succeed Group
         |> required "id" (Decode.int)
         |> required "name" Decode.string
         |> required "description" Decode.string

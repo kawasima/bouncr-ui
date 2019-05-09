@@ -1,4 +1,4 @@
-module Page.PermissionAdmin exposing (Model, Msg, init, subscriptions, toSession, update, view)
+module Page.RoleAdmin exposing (Model, Msg, init, subscriptions, toSession, update, view)
 
 import Api exposing (Cred, MaybeSuccess(..))
 import Api.Endpoint as Endpoint
@@ -16,7 +16,7 @@ import Route
 import Task exposing (Task)
 import Time
 import Url.Builder exposing (int, string)
-import Model.Permission as Permission exposing (Permission)
+import Model.Role as Role exposing (Role)
 import Account exposing (Account)
 import Viewer
 
@@ -26,8 +26,8 @@ pageSize = 10
 
 type alias Model =
     { session : Session
-    , permissions: Status (List Permission)
-    , targetPermission : Maybe Permission
+    , roles: Status (List Role)
+    , targetRole : Maybe Role
     , mode : Mode
     , readMore : Bool
     , form : Form
@@ -69,8 +69,8 @@ type alias SearchParams =
 init : Session -> ( Model, Cmd Msg )
 init session =
     ( { session = session
-      , permissions = Loading
-      , targetPermission = Nothing
+      , roles = Loading
+      , targetRole = Nothing
       , mode = ListMode
       , offset = Offset 0
       , readMore = True
@@ -82,8 +82,8 @@ init session =
       , problems = []
       }
     , Cmd.batch
-        [ fetchPermissions (SearchParams (Just (Offset 0)) pageSize Nothing) session
-            |> Task.attempt CompletedPermissionsLoad
+        [ fetchRoles (SearchParams (Just (Offset 0)) pageSize Nothing) session
+            |> Task.attempt CompletedRolesLoad
         ]
     )
 
@@ -91,7 +91,7 @@ init session =
 
 view : Model -> { title : String, content : Html Msg }
 view model =
-    { title = "Permission Administration"
+    { title = "Role Administration"
     , content =
         div [ class "home-page" ]
             [ div [ class "container page" ]
@@ -128,10 +128,10 @@ viewList model =
                     [ ]
               ]
             ]
-          , div [ class "row" ] <|
-            case model.permissions of
+        , div [ class "row" ] <|
+            case model.roles of
                 Loading -> []
-                Loaded permissions ->
+                Loaded roles ->
                     [ table [ class "table" ]
                       [ thead []
                         [ tr []
@@ -141,56 +141,56 @@ viewList model =
                         ]
                       , tbody []
                           (List.append
-                              (List.map viewPermission permissions)
+                              (List.map viewRole roles)
                               (if model.readMore then
-                                  [ tr []
-                                    [ td []
-                                          [ span [ custom "click"
-                                                    (Decode.succeed
-                                                         { stopPropagation = True
-                                                         , preventDefault = True
-                                                         , message = (ClickedReadMore model.offset)
-                                                         }
-                                                    )
-                                              , href "#/permission_admin"
-                                              ]
-                                                [ text "Read more" ]
-                                          ]
-                                    ]
-                                  ]
-                              else
+                                   [ tr []
+                                     [ td []
+                                       [ a [ custom "click"
+                                                 (Decode.succeed
+                                                      { stopPropagation = False
+                                                      , preventDefault = True
+                                                      , message = (ClickedReadMore model.offset)
+                                                      }
+                                                 )
+                                           , href "#/role_admin"
+                                           ]
+                                             [ text "Read more" ]
+                                       ]
+                                     ]
+                                   ]
+                               else
                                    [])
                           )
 
                       ]
                     ]
                 Failed ->
-                    [ Loading.error "permission" ]
+                    [ Loading.error "role" ]
         ]
 
-viewPermission : Permission -> Html Msg
-viewPermission permission =
+viewRole : Role -> Html Msg
+viewRole role =
     tr []
         [ td [ ]
           [ a [ custom "click"
                     (Decode.succeed
                          { stopPropagation = True
                          , preventDefault = True
-                         , message = (ClickedUpdateLink permission.name)
+                         , message = (ClickedUpdateLink role.name)
                          }
                     )
-              , href "#/permission_admin"
+              , href "#/role_admin"
               ]
-           [ text permission.name ]
+           [ text role.name ]
           ]
         , td [ ]
-            [ text permission.description ]
+            [ text role.description ]
         ]
 
 viewForm : Form -> Html Msg
 viewForm form =
     Html.form [ onSubmit SubmittedForm ]
-        [ h2 [ ] [ text "Edit Permission" ]
+        [ h2 [ ] [ text "Edit Role" ]
         , fieldset [ class "form-group" ]
               [ input
                     [ class "form-control form-control-lg"
@@ -265,14 +265,14 @@ trimFields form =
 
 -- HTTP
 
-fetchPermissions: SearchParams -> Session -> Task Http.Error (Http.Metadata, MaybeSuccess (List Permission))
-fetchPermissions params session =
+fetchRoles: SearchParams -> Session -> Task Http.Error (Http.Metadata, MaybeSuccess (List Role))
+fetchRoles params session =
     let
         maybeCred =
             Session.cred session
 
         decoder =
-            Decode.list Permission.decoder
+            Decode.list Role.decoder
 
         query = List.concat
                 [ [ int "limit" params.limit ]
@@ -287,18 +287,19 @@ fetchPermissions params session =
                       Nothing ->
                           []
                 ]
+
     in
         Http.task
             { method = "GET"
             , headers = Api.headers maybeCred
-            , url = Api.url ["permissions"] query
+            , url = Api.url ["roles"] query
             , body = Http.emptyBody
             , resolver = Api.jsonResolver decoder
             , timeout = Nothing
             }
 
-fetchPermission: String -> Session -> Task Http.Error (Http.Metadata, MaybeSuccess Permission)
-fetchPermission name session =
+fetchRole: String -> Session -> Task Http.Error (Http.Metadata, MaybeSuccess Role)
+fetchRole name session =
     let
         maybeCred =
             Session.cred session
@@ -306,14 +307,14 @@ fetchPermission name session =
         Http.task
             { method = "GET"
             , headers = Api.headers maybeCred
-            , url = Api.url ["permission", name] []
+            , url = Api.url ["role", name] []
             , body = Http.emptyBody
-            , resolver = Api.jsonResolver Permission.decoder
+            , resolver = Api.jsonResolver Role.decoder
             , timeout = Nothing
             }
 
-createPermission : TrimmedForm -> Session -> Task Http.Error (Http.Metadata, MaybeSuccess Permission)
-createPermission (Trimmed form) session =
+createRole : TrimmedForm -> Session -> Task Http.Error (Http.Metadata, MaybeSuccess Role)
+createRole (Trimmed form) session =
     let
         maybeCred =
             Session.cred session
@@ -327,14 +328,14 @@ createPermission (Trimmed form) session =
         Http.task
             { method = "POST"
             , headers = Api.headers maybeCred
-            , url = Api.url ["permissions" ] []
+            , url = Api.url ["roles" ] []
             , body = body
-            , resolver = Api.jsonResolver Permission.decoder
+            , resolver = Api.jsonResolver Role.decoder
             , timeout = Nothing
             }
 
-updatePermission : TrimmedForm -> String -> Session -> Task Http.Error (Http.Metadata, MaybeSuccess Permission)
-updatePermission (Trimmed form) name session =
+updateRole : TrimmedForm -> String -> Session -> Task Http.Error (Http.Metadata, MaybeSuccess Role)
+updateRole (Trimmed form) name session =
     let
         maybeCred =
             Session.cred session
@@ -349,9 +350,9 @@ updatePermission (Trimmed form) name session =
         Http.task
             { method = "PUT"
             , headers = Api.headers maybeCred
-            , url = Api.url [ "permission", name ] []
+            , url = Api.url [ "role", name ] []
             , body = body
-            , resolver = Api.jsonResolver Permission.decoder
+            , resolver = Api.jsonResolver Role.decoder
             , timeout = Nothing
             }
 
@@ -359,8 +360,8 @@ updatePermission (Trimmed form) name session =
 
 type Msg
     = GotSession Session
-    | CompletedPermissionsLoad (Result Http.Error (Http.Metadata, MaybeSuccess (List Permission)))
-    | CompletedPermissionLoad (Result Http.Error (Http.Metadata, MaybeSuccess Permission))
+    | CompletedRolesLoad (Result Http.Error (Http.Metadata, MaybeSuccess (List Role)))
+    | CompletedRoleLoad (Result Http.Error (Http.Metadata, MaybeSuccess Role))
     | ClickedNewButton
     | ClickedUpdateLink String
     | ClickedReadMore Offset
@@ -368,7 +369,7 @@ type Msg
     | EnteredDescription String
     | EnteredKeyword String
     | SubmittedForm
-    | CompletedSave (Result Http.Error (Http.Metadata, MaybeSuccess Permission))
+    | CompletedSave (Result Http.Error (Http.Metadata, MaybeSuccess Role))
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
@@ -376,67 +377,67 @@ update msg model =
         GotSession session ->
             ( { model | session = session }, Cmd.none )
 
-        CompletedPermissionsLoad (Ok (_, res)) ->
+        CompletedRolesLoad (Ok (_, res)) ->
             case res of
-                Success permissions ->
+                Success roles ->
                     ( { model
-                          | permissions =
-                              Loaded (case model.permissions of
+                          | roles =
+                              Loaded (case model.roles of
                                           Loaded ps ->
-                                              (List.append ps permissions)
+                                              (List.append ps roles)
                                           _ ->
-                                              permissions
+                                              roles
                                      )
-                          , offset = Offset (((\(Offset o) -> o) model.offset ) + (List.length permissions))
-                          , readMore = (List.length permissions) >= pageSize
+                          , offset = Offset (((\(Offset o) -> o) model.offset ) + (List.length roles))
+                          , readMore = (List.length roles) >= pageSize
                       }
                     , Cmd.none )
                 Failure problem ->
                     case problem.status of
                         401 ->
-                            ( { model | permissions = Failed }
+                            ( { model | roles = Failed }
                             , Route.replaceUrl (Session.navKey model.session) Route.SignIn)
                         _ ->
                             ( { model | problems = [ServerError "server error"] }, Cmd.none )
 
-        CompletedPermissionsLoad (Err err) ->
-            ( { model | permissions = Failed }, Cmd.none )
+        CompletedRolesLoad (Err err) ->
+            ( { model | roles = Failed }, Cmd.none )
 
-        CompletedPermissionLoad (Ok (_, res)) ->
+        CompletedRoleLoad (Ok (_, res)) ->
             case res of
-                Success permission ->
+                Success role ->
                     ( { model
-                          | targetPermission = Just permission
+                          | targetRole = Just role
                           , form =
-                            { name = permission.name
-                            , description = permission.description
+                            { name = role.name
+                            , description = role.description
                             }
                           , mode = EditMode }, Cmd.none )
                 Failure problem ->
                     case problem.status of
                         401 ->
-                            ( { model | permissions = Failed }
+                            ( { model | roles = Failed }
                             , Route.replaceUrl (Session.navKey model.session) Route.SignIn)
                         _ ->
                             ( { model | problems = [ServerError "server error"] }, Cmd.none )
 
-        CompletedPermissionLoad (Err err) ->
+        CompletedRoleLoad (Err err) ->
             ( model, Cmd.none )
 
         ClickedNewButton ->
-            ( { model | targetPermission = Nothing, mode = EditMode }
+            ( { model | targetRole = Nothing, mode = EditMode }
             , Cmd.none
             )
 
         ClickedUpdateLink name ->
-            ( model, Task.attempt CompletedPermissionLoad ( fetchPermission name model.session ))
+            ( model, Task.attempt CompletedRoleLoad ( fetchRole name model.session ))
 
         ClickedReadMore offset ->
-            ( model, Task.attempt CompletedPermissionsLoad ( fetchPermissions (SearchParams (Just offset) pageSize (Just model.searchForm.keyword)) model.session ))
+            ( model, Task.attempt CompletedRolesLoad ( fetchRoles (SearchParams (Just offset) pageSize (Just model.searchForm.keyword)) model.session ))
 
         EnteredKeyword keyword ->
-            ( { model | searchForm = { keyword = keyword }, permissions = Loading }
-            , Task.attempt CompletedPermissionsLoad ( fetchPermissions (SearchParams (Just (Offset 0)) pageSize (Just keyword)) model.session ))
+            ( { model | searchForm = { keyword = keyword }, roles = Loading }
+            , Task.attempt CompletedRolesLoad ( fetchRoles (SearchParams (Just (Offset 0)) pageSize (Just keyword)) model.session ))
 
         EnteredName name ->
             updateForm (\form -> { form | name = name }) model
@@ -449,11 +450,11 @@ update msg model =
                 Ok validForm ->
                     ( { model | problems = [] }
                     , Task.attempt CompletedSave <|
-                        case model.targetPermission of
-                            Just permission ->
-                                updatePermission validForm permission.name model.session
+                        case model.targetRole of
+                            Just role ->
+                                updateRole validForm role.name model.session
                             Nothing ->
-                                createPermission validForm model.session
+                                createRole validForm model.session
                     )
                 Err problems ->
                     ( { model | problems = problems }
@@ -462,10 +463,10 @@ update msg model =
 
         CompletedSave (Ok (_, res)) ->
             case res of
-                Success permission ->
+                Success role ->
                     ( { model | mode = ListMode }
-                    , fetchPermissions (SearchParams (Just model.offset) pageSize Nothing) model.session
-                        |> Task.attempt CompletedPermissionsLoad)
+                    , fetchRoles (SearchParams (Just model.offset) pageSize Nothing) model.session
+                        |> Task.attempt CompletedRolesLoad)
                 Failure problem ->
                     ( { model | problems = [ ServerError "server error" ] }, Cmd.none )
 

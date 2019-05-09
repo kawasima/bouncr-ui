@@ -1,4 +1,4 @@
-module Page.ResetPassword exposing (Model, Msg, init, subscriptions, toSession, update, view)
+module Page.ResetPasswordChallenge exposing (Model, Msg, init, subscriptions, toSession, update, view)
 
 import Api exposing (Cred, MaybeSuccess(..))
 import Browser.Navigation as Nav
@@ -14,15 +14,13 @@ import Session exposing (Session)
 import Task exposing (Task)
 import Viewer exposing (Viewer)
 
-import Model.InitialPassword as InitialPassword exposing (InitialPassword)
-
 -- MODEL
 
 type alias Model =
     { session : Session
     , problems : List Problem
     , form : Form
-    , initialPassword: String
+    , completed : Bool
     }
 
 type Problem
@@ -31,23 +29,19 @@ type Problem
 
 type alias Form =
     { account : String
-    , password : String
     }
 
-init : String -> Session -> (Model, Cmd Msg)
-init code session =
+init : Session -> (Model, Cmd msg)
+init session =
     ( { session = session
       , problems = []
       , form =
           { account = ""
-          , password = ""
           }
-      , initialPassword = ""
+      , completed = False
       }
-    , Cmd.batch
-        [ (resetPassword code)
-        |> Task.attempt CompletedReset
-        ]
+
+    , Cmd.none
     )
 
 -- VIEW
@@ -60,10 +54,13 @@ view model =
             [ div [ class "container page" ]
               [ div [ class "row" ]
                 [ div [class "col-md-6 offset-md-3 col-xs-12" ]
-                  [ h1 [ class "text-xs-center" ] [ text "Change password" ]
+                  [ h1 [ class "text-xs-center" ] [ text "Reset password" ]
                   , ul [ class "error-messages" ]
                       (List.map viewProblem model.problems)
-                  , viewForm model.form
+                  , if model.completed then
+                        viewCompleted
+                    else
+                        viewForm model.form
                   ]
                 ]
               ]
@@ -95,28 +92,21 @@ viewForm form =
                     ]
                     []
               ]
-        , fieldset [ class "form-group" ]
-            [ input
-                  [ class "form-control form-control-lg"
-                  , type_ "password"
-                  , placeholder "New Password"
-                  , onInput EnteredPassword
-                  , value form.password
-                  ]
-                  []
-            ]
         , button [ class "btn btn-lg btn-primary pull-xs-right"]
-            [ text "Change Password" ]
+            [ text "Request for Reset Password" ]
         ]
+
+viewCompleted : Html Msg
+viewCompleted =
+    div [ class "alert alert-info" ]
+        [ text "Sent a reset request" ]
 
  -- UPDATE
 
 type Msg
     = SubmittedForm
     | EnteredAccount String
-    | EnteredPassword String
-    | CompletedReset (Result Http.Error (Http.Metadata, MaybeSuccess InitialPassword))
-    | CompletedChange (Result Http.Error (Http.Metadata, MaybeSuccess ()))
+    | CompletedResetChallenge (Result Http.Error (Http.Metadata, MaybeSuccess ()))
     | GotSession Session
 
 update : Msg -> Model -> ( Model, Cmd Msg)
@@ -126,40 +116,24 @@ update msg model =
             case validate model.form of
                 Ok validForm ->
                     ( { model | problems = [] }
-                    , Task.attempt CompletedChange (changePassword model.initialPassword validForm)
+                    , Task.attempt CompletedResetChallenge (resetPasswordChallenge validForm)
                     )
                 Err problems ->
                     ( { model | problems = problems }
                     , Cmd.none
                     )
+
         EnteredAccount account ->
             updateForm (\form -> { form | account = account }) model
 
-        EnteredPassword password ->
-            updateForm (\form -> { form | password = password }) model
-
-        CompletedReset (Err error) ->
+        CompletedResetChallenge (Err error) ->
             case error of
                 _ ->
                     ( { model | problems = [ ServerError "server error"] }, Cmd.none )
 
-        CompletedReset (Ok (_, maybeInitialPassword)) ->
-            case maybeInitialPassword of
-                Success initialPassword ->
-                    ( { model | initialPassword = initialPassword.password }
-                    , Cmd.none )
-                Failure problem ->
-                    ( { model | problems = [ ServerError "server error"] }
-                    , Cmd.none )
-
-        CompletedChange (Err error) ->
-            case error of
-                _ ->
-                    ( { model | problems = [ ServerError "server error"] }, Cmd.none )
-
-        CompletedChange (Ok (_, _)) ->
-            ( model
-            , Route.replaceUrl (Session.navKey model.session) Route.SignIn )
+        CompletedResetChallenge (Ok (_, _)) ->
+            ( { model | completed = True }
+            , Cmd.none )
 
         GotSession session ->
             ( { model | session = session }
@@ -183,12 +157,10 @@ type TrimmedForm
 
 type ValidatedField
     = Account
-    | Password
 
 fieldsToValidate : List ValidatedField
 fieldsToValidate =
     [ Account
-    , Password
     ]
 
 validate : Form -> Result (List Problem) TrimmedForm
@@ -213,53 +185,27 @@ validateField (Trimmed form) field =
                     [ "account can't be blank." ]
                 else
                     []
-            Password ->
-                if String.isEmpty form.password then
-                    [ "password can't be blank." ]
-                else
-                    []
 
 trimFields : Form -> TrimmedForm
 trimFields form =
     Trimmed
-        { account  = String.trim form.account
-        , password = String.trim form.password
+        { account = String.trim form.account
         }
 
 -- HTTP
 
-resetPassword : String -> Task Http.Error (Http.Metadata, MaybeSuccess InitialPassword)
-resetPassword code =
+resetPasswordChallenge : TrimmedForm -> Task Http.Error (Http.Metadata, MaybeSuccess ())
+resetPasswordChallenge (Trimmed form) =
     let
         body =
             Encode.object
-                [ ( "code", Encode.string code ) ]
+                [ ( "account", Encode.string form.account ) ]
                     |> Http.jsonBody
     in
         Http.task
-            { method = "PUT"
+            { method = "POST"
             , headers = [ Http.header "Accept" "application/json" ]
-            , url = Api.url ["password_credential", "reset"] []
-            , body = body
-            , resolver = Api.jsonResolver InitialPassword.decoder
-            , timeout = Nothing
-            }
-
-changePassword : String -> TrimmedForm -> Task Http.Error (Http.Metadata, MaybeSuccess ())
-changePassword initialPassword (Trimmed form) =
-    let
-        body =
-            Encode.object
-                [ ( "account", Encode.string form.account )
-                , ( "old_password", Encode.string initialPassword )
-                , ( "new_password", Encode.string form.password )
-                ]
-                |> Http.jsonBody
-    in
-        Http.task
-            { method = "PUT"
-            , headers = [ Http.header "Accept" "application/json" ]
-            , url = Api.url ["password_credential"] []
+            , url = Api.url ["password_credential", "reset_code"] []
             , body = body
             , resolver = Api.jsonResolver (Decode.succeed ())
             , timeout = Nothing

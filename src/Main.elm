@@ -13,7 +13,12 @@ import Page.Home as Home
 import Page.SignIn as SignIn
 import Page.SignUp as SignUp
 import Page.ChangePassword as ChangePassword
+import Page.ResetPasswordChallenge as ResetPasswordChallenge
+import Page.ResetPassword as ResetPassword
 import Page.UserAdmin as UserAdmin
+import Page.GroupAdmin as GroupAdmin
+import Page.ApplicationAdmin as ApplicationAdmin
+import Page.RoleAdmin as RoleAdmin
 import Page.PermissionAdmin as PermissionAdmin
 import Route exposing (Route)
 import Session exposing (Session)
@@ -30,7 +35,12 @@ type Model
     | SignIn SignIn.Model
     | SignUp SignUp.Model
     | ChangePassword ChangePassword.Model
+    | ResetPasswordChallenge ResetPasswordChallenge.Model
+    | ResetPassword ResetPassword.Model
     | UserAdmin UserAdmin.Model
+    | GroupAdmin GroupAdmin.Model
+    | ApplicationAdmin ApplicationAdmin.Model
+    | RoleAdmin RoleAdmin.Model
     | PermissionAdmin PermissionAdmin.Model
 
 -- MODEL
@@ -73,8 +83,23 @@ view model =
             ChangePassword changePassword ->
                 viewPage Page.Other GotChangePasswordMsg (ChangePassword.view changePassword)
 
+            ResetPasswordChallenge resetPasswordChallenge ->
+                viewPage Page.Other GotResetPasswordChallengeMsg (ResetPasswordChallenge.view resetPasswordChallenge)
+
+            ResetPassword resetPassword ->
+                viewPage Page.Other GotResetPasswordMsg (ResetPassword.view resetPassword)
+
             UserAdmin userAdmin ->
                 viewPage Page.Other GotUserAdminMsg (UserAdmin.view userAdmin)
+
+            GroupAdmin groupAdmin ->
+                viewPage Page.Other GotGroupAdminMsg (GroupAdmin.view groupAdmin)
+
+            ApplicationAdmin applicationAdmin ->
+                viewPage Page.Other GotApplicationAdminMsg (ApplicationAdmin.view applicationAdmin)
+
+            RoleAdmin roleAdmin ->
+                viewPage Page.Other GotRoleAdminMsg (RoleAdmin.view roleAdmin)
 
             PermissionAdmin permissionAdmin ->
                 viewPage Page.Other GotPermissionAdminMsg (PermissionAdmin.view permissionAdmin)
@@ -110,7 +135,12 @@ type Msg
     | GotSignInMsg SignIn.Msg
     | GotSignUpMsg SignUp.Msg
     | GotChangePasswordMsg ChangePassword.Msg
+    | GotResetPasswordChallengeMsg ResetPasswordChallenge.Msg
+    | GotResetPasswordMsg ResetPassword.Msg
     | GotUserAdminMsg UserAdmin.Msg
+    | GotGroupAdminMsg GroupAdmin.Msg
+    | GotApplicationAdminMsg ApplicationAdmin.Msg
+    | GotRoleAdminMsg RoleAdmin.Msg
     | GotPermissionAdminMsg PermissionAdmin.Msg
     | GotSession Session
     | SignedOut (Result Http.Error (Http.Metadata, MaybeSuccess ()))
@@ -136,8 +166,23 @@ toSession page =
         ChangePassword changePassword ->
             ChangePassword.toSession changePassword
 
+        ResetPasswordChallenge resetPasswordChallenge ->
+            ResetPasswordChallenge.toSession resetPasswordChallenge
+
+        ResetPassword resetPassword ->
+            ResetPassword.toSession resetPassword
+
         UserAdmin userAdmin ->
             UserAdmin.toSession userAdmin
+
+        GroupAdmin groupAdmin ->
+            GroupAdmin.toSession groupAdmin
+
+        ApplicationAdmin applicationAdmin ->
+            ApplicationAdmin.toSession applicationAdmin
+
+        RoleAdmin roleAdmin ->
+            RoleAdmin.toSession roleAdmin
 
         PermissionAdmin permissionAdmin ->
             PermissionAdmin.toSession permissionAdmin
@@ -174,9 +219,33 @@ changeRouteTo maybeRoute model =
                 ChangePassword.init session
                     |> updateWith ChangePassword GotChangePasswordMsg model
 
+            Just Route.ResetPasswordChallenge ->
+                ResetPasswordChallenge.init session
+                    |> updateWith ResetPasswordChallenge GotResetPasswordChallengeMsg model
+
+            Just (Route.ResetPassword maybeCode) ->
+                (ResetPassword.init
+                     (case maybeCode of
+                         Just code -> code
+                         Nothing -> "")
+                     session )
+                    |> updateWith ResetPassword GotResetPasswordMsg model
+
             Just Route.UserAdmin ->
                 UserAdmin.init session
                     |> updateWith UserAdmin GotUserAdminMsg model
+
+            Just Route.GroupAdmin ->
+                GroupAdmin.init session
+                    |> updateWith GroupAdmin GotGroupAdminMsg model
+
+            Just Route.ApplicationAdmin ->
+                ApplicationAdmin.init session
+                    |> updateWith ApplicationAdmin GotApplicationAdminMsg model
+
+            Just Route.RoleAdmin ->
+                RoleAdmin.init session
+                    |> updateWith RoleAdmin GotRoleAdminMsg model
 
             Just Route.PermissionAdmin ->
                 PermissionAdmin.init session
@@ -219,6 +288,14 @@ update msg model =
             ChangePassword.update subMsg changePassword
                 |> updateWith ChangePassword GotChangePasswordMsg model
 
+        ( GotResetPasswordChallengeMsg subMsg, ResetPasswordChallenge resetPasswordChallenge ) ->
+            ResetPasswordChallenge.update subMsg resetPasswordChallenge
+                |> updateWith ResetPasswordChallenge GotResetPasswordChallengeMsg model
+
+        ( GotResetPasswordMsg subMsg, ResetPassword resetPassword ) ->
+            ResetPassword.update subMsg resetPassword
+                |> updateWith ResetPassword GotResetPasswordMsg model
+
         ( GotHomeMsg subMsg, Home home ) ->
             Home.update subMsg home
                 |> updateWith Home GotHomeMsg model
@@ -226,6 +303,18 @@ update msg model =
         ( GotUserAdminMsg subMsg, UserAdmin userAdmin ) ->
             UserAdmin.update subMsg userAdmin
                 |> updateWith UserAdmin GotUserAdminMsg model
+
+        ( GotGroupAdminMsg subMsg, GroupAdmin groupAdmin ) ->
+            GroupAdmin.update subMsg groupAdmin
+                |> updateWith GroupAdmin GotGroupAdminMsg model
+
+        ( GotApplicationAdminMsg subMsg, ApplicationAdmin applicationAdmin ) ->
+            ApplicationAdmin.update subMsg applicationAdmin
+                |> updateWith ApplicationAdmin GotApplicationAdminMsg model
+
+        ( GotRoleAdminMsg subMsg, RoleAdmin roleAdmin ) ->
+            RoleAdmin.update subMsg roleAdmin
+                |> updateWith RoleAdmin GotRoleAdminMsg model
 
         ( GotPermissionAdminMsg subMsg, PermissionAdmin permissionAdmin ) ->
             PermissionAdmin.update subMsg permissionAdmin
@@ -271,8 +360,23 @@ subscriptions model =
         ChangePassword changePassword ->
             Sub.map GotChangePasswordMsg (ChangePassword.subscriptions changePassword)
 
+        ResetPasswordChallenge resetPasswordChallenge ->
+            Sub.map GotResetPasswordChallengeMsg (ResetPasswordChallenge.subscriptions resetPasswordChallenge)
+
+        ResetPassword resetPassword ->
+            Sub.map GotResetPasswordMsg (ResetPassword.subscriptions resetPassword)
+
         UserAdmin userAdmin ->
             Sub.map GotUserAdminMsg (UserAdmin.subscriptions userAdmin)
+
+        GroupAdmin groupAdmin ->
+            Sub.map GotGroupAdminMsg (GroupAdmin.subscriptions groupAdmin)
+
+        ApplicationAdmin applicationAdmin ->
+            Sub.map GotApplicationAdminMsg (ApplicationAdmin.subscriptions applicationAdmin)
+
+        RoleAdmin roleAdmin ->
+            Sub.map GotRoleAdminMsg (RoleAdmin.subscriptions roleAdmin)
 
         PermissionAdmin permissionAdmin ->
             Sub.map GotPermissionAdminMsg (PermissionAdmin.subscriptions permissionAdmin)

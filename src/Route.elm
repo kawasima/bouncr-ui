@@ -4,7 +4,8 @@ import Browser.Navigation as Nav
 import Html exposing (Attribute)
 import Html.Attributes as Attr
 import Url exposing (Url)
-import Url.Parser as Parser exposing ((</>), Parser, oneOf, s, string)
+import Url.Parser as Parser exposing ((</>), (<?>), Parser, oneOf, s, string)
+import Url.Parser.Query as Query
 import Account exposing (Account)
 
 
@@ -18,7 +19,12 @@ type Route
     | SignOut
     | SignUp
     | ChangePassword
+    | ResetPasswordChallenge
+    | ResetPassword (Maybe String)
     | UserAdmin
+    | GroupAdmin
+    | ApplicationAdmin
+    | RoleAdmin
     | PermissionAdmin
 
 parser : Parser (Route -> a) a
@@ -29,7 +35,12 @@ parser =
         , Parser.map SignOut (s "sign_out")
         , Parser.map SignUp (s "sign_up")
         , Parser.map ChangePassword (s "change_password")
+        , Parser.map ResetPasswordChallenge (s "reset_password_challenge")
+        , Parser.map ResetPassword (s "reset_password" <?> Query.string "code")
         , Parser.map UserAdmin (s "user_admin")
+        , Parser.map GroupAdmin (s "group_admin")
+        , Parser.map ApplicationAdmin (s "application_admin")
+        , Parser.map RoleAdmin (s "role_admin")
         , Parser.map PermissionAdmin (s "permission_admin")
         ]
 
@@ -49,7 +60,10 @@ fromUrl url =
     -- The RealWorld spec treats the fragment like a path.
     -- This makes it *literally* the path, so we can proceed
     -- with parsing as if it had been a normal path all along.
-    { url | path = Maybe.withDefault "" url.fragment, fragment = Nothing }
+    { url
+        | path = Maybe.withDefault "" url.fragment
+        , query = url.query
+        , fragment = Nothing }
         |> Parser.parse parser
 
 
@@ -79,8 +93,26 @@ routeToString page =
                 ChangePassword ->
                     [ "change_password" ]
 
+                ResetPasswordChallenge ->
+                    [ "reset_password_challenge" ]
+
+                ResetPassword (Just code) ->
+                    [ "reset_password", code ]
+
+                ResetPassword Nothing ->
+                    [ "reset_password" ]
+
                 UserAdmin ->
                     [ "user_admin" ]
+
+                GroupAdmin ->
+                    [ "group_admin" ]
+
+                ApplicationAdmin ->
+                    [ "application_admin" ]
+
+                RoleAdmin ->
+                    [ "role_admin" ]
 
                 PermissionAdmin ->
                     [ "permission_admin" ]

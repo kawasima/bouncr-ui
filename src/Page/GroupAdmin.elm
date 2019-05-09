@@ -1,4 +1,4 @@
-module Page.PermissionAdmin exposing (Model, Msg, init, subscriptions, toSession, update, view)
+module Page.GroupAdmin exposing (Model, Msg, init, subscriptions, toSession, update, view)
 
 import Api exposing (Cred, MaybeSuccess(..))
 import Api.Endpoint as Endpoint
@@ -15,8 +15,8 @@ import Session exposing (Session)
 import Route
 import Task exposing (Task)
 import Time
-import Url.Builder exposing (int, string)
-import Model.Permission as Permission exposing (Permission)
+import Url.Builder exposing (int)
+import Model.Group as Group exposing (Group)
 import Account exposing (Account)
 import Viewer
 
@@ -26,12 +26,10 @@ pageSize = 10
 
 type alias Model =
     { session : Session
-    , permissions: Status (List Permission)
-    , targetPermission : Maybe Permission
+    , groups: Status (List Group)
+    , targetGroup : Maybe Group
     , mode : Mode
-    , readMore : Bool
     , form : Form
-    , searchForm : SearchForm
     , offset: Offset
     , problems : List Problem
     }
@@ -50,9 +48,6 @@ type alias Form =
     , description : String
     }
 
-type alias SearchForm =
-    { keyword : String }
-
 type Problem
     = InvalidEntry ValidatedField String
     | ServerError String
@@ -60,30 +55,22 @@ type Problem
 type Offset
     = Offset Int
 
-type alias SearchParams =
-    { offset: Maybe Offset
-    , limit: Int
-    , q : Maybe String
-    }
-
 init : Session -> ( Model, Cmd Msg )
 init session =
     ( { session = session
-      , permissions = Loading
-      , targetPermission = Nothing
+      , groups = Loading
+      , targetGroup = Nothing
       , mode = ListMode
       , offset = Offset 0
-      , readMore = True
       , form =
           { name = ""
           , description = ""
           }
-      , searchForm = { keyword = "" }
       , problems = []
       }
     , Cmd.batch
-        [ fetchPermissions (SearchParams (Just (Offset 0)) pageSize Nothing) session
-            |> Task.attempt CompletedPermissionsLoad
+        [ fetchGroups (Offset 0) session
+            |> Task.attempt CompletedGroupsLoad
         ]
     )
 
@@ -91,7 +78,7 @@ init session =
 
 view : Model -> { title : String, content : Html Msg }
 view model =
-    { title = "Permission Administration"
+    { title = "Group Administration"
     , content =
         div [ class "home-page" ]
             [ div [ class "container page" ]
@@ -109,29 +96,15 @@ viewList : Model -> Html Msg
 viewList model =
     div []
         [ div [ class "row" ]
-          [ div [ class "col-sm-6" ]
-            [ Html.form [ class "form-inline" ]
               [ button
-                [ class "btn btn-primary"
-                , onClick ClickedNewButton
-                ]
-                    [ text "New" ]
-              ]
-            ]
-          , div [ class "col-sm-6" ]
-              [ input
-                    [ type_ "text"
-                    , class "form-control"
-                    , placeholder "Search..."
-                    , onInput EnteredKeyword
-                    , value model.searchForm.keyword ]
-                    [ ]
-              ]
-            ]
-          , div [ class "row" ] <|
-            case model.permissions of
+                    [ class "btn btn-primary"
+                    , onClick ClickedNewButton
+                    ]
+                    [ text "New" ] ]
+        , div [ class "row" ] <|
+            case model.groups of
                 Loading -> []
-                Loaded permissions ->
+                Loaded groups ->
                     [ table [ class "table" ]
                       [ thead []
                         [ tr []
@@ -141,56 +114,53 @@ viewList model =
                         ]
                       , tbody []
                           (List.append
-                              (List.map viewPermission permissions)
-                              (if model.readMore then
-                                  [ tr []
+                              (List.map viewGroup groups)
+                              [ tr []
                                     [ td []
-                                          [ span [ custom "click"
+                                          [ a [ custom "click"
                                                     (Decode.succeed
-                                                         { stopPropagation = True
+                                                         { stopPropagation = False
                                                          , preventDefault = True
                                                          , message = (ClickedReadMore model.offset)
                                                          }
                                                     )
-                                              , href "#/permission_admin"
+                                              , href "#/group_admin"
                                               ]
                                                 [ text "Read more" ]
                                           ]
                                     ]
-                                  ]
-                              else
-                                   [])
+                              ]
                           )
 
                       ]
                     ]
                 Failed ->
-                    [ Loading.error "permission" ]
+                    [ Loading.error "group" ]
         ]
 
-viewPermission : Permission -> Html Msg
-viewPermission permission =
+viewGroup : Group -> Html Msg
+viewGroup group =
     tr []
         [ td [ ]
           [ a [ custom "click"
                     (Decode.succeed
                          { stopPropagation = True
                          , preventDefault = True
-                         , message = (ClickedUpdateLink permission.name)
+                         , message = (ClickedUpdateLink group.name)
                          }
                     )
-              , href "#/permission_admin"
+              , href "#/group_admin"
               ]
-           [ text permission.name ]
+           [ text group.name ]
           ]
         , td [ ]
-            [ text permission.description ]
+            [ text group.description ]
         ]
 
 viewForm : Form -> Html Msg
 viewForm form =
     Html.form [ onSubmit SubmittedForm ]
-        [ h2 [ ] [ text "Edit Permission" ]
+        [ h2 [ ] [ text "Edit Group" ]
         , fieldset [ class "form-group" ]
               [ input
                     [ class "form-control form-control-lg"
@@ -265,40 +235,26 @@ trimFields form =
 
 -- HTTP
 
-fetchPermissions: SearchParams -> Session -> Task Http.Error (Http.Metadata, MaybeSuccess (List Permission))
-fetchPermissions params session =
+fetchGroups: Offset -> Session -> Task Http.Error (Http.Metadata, MaybeSuccess (List Group))
+fetchGroups (Offset offset) session =
     let
         maybeCred =
             Session.cred session
 
         decoder =
-            Decode.list Permission.decoder
-
-        query = List.concat
-                [ [ int "limit" params.limit ]
-                , case params.offset of
-                      Just (Offset offset) ->
-                          [ int "offset" offset ]
-                      Nothing ->
-                          []
-                , case  params.q of
-                      Just q ->
-                          [ string "q" q ]
-                      Nothing ->
-                          []
-                ]
+            Decode.list Group.decoder
     in
         Http.task
             { method = "GET"
             , headers = Api.headers maybeCred
-            , url = Api.url ["permissions"] query
+            , url = Api.url ["groups"] [ int "offset" offset ]
             , body = Http.emptyBody
             , resolver = Api.jsonResolver decoder
             , timeout = Nothing
             }
 
-fetchPermission: String -> Session -> Task Http.Error (Http.Metadata, MaybeSuccess Permission)
-fetchPermission name session =
+fetchGroup: String -> Session -> Task Http.Error (Http.Metadata, MaybeSuccess Group)
+fetchGroup name session =
     let
         maybeCred =
             Session.cred session
@@ -306,14 +262,14 @@ fetchPermission name session =
         Http.task
             { method = "GET"
             , headers = Api.headers maybeCred
-            , url = Api.url ["permission", name] []
+            , url = Api.url ["group", name] []
             , body = Http.emptyBody
-            , resolver = Api.jsonResolver Permission.decoder
+            , resolver = Api.jsonResolver Group.decoder
             , timeout = Nothing
             }
 
-createPermission : TrimmedForm -> Session -> Task Http.Error (Http.Metadata, MaybeSuccess Permission)
-createPermission (Trimmed form) session =
+createGroup : TrimmedForm -> Session -> Task Http.Error (Http.Metadata, MaybeSuccess Group)
+createGroup (Trimmed form) session =
     let
         maybeCred =
             Session.cred session
@@ -327,14 +283,14 @@ createPermission (Trimmed form) session =
         Http.task
             { method = "POST"
             , headers = Api.headers maybeCred
-            , url = Api.url ["permissions" ] []
+            , url = Api.url ["groups" ] []
             , body = body
-            , resolver = Api.jsonResolver Permission.decoder
+            , resolver = Api.jsonResolver Group.decoder
             , timeout = Nothing
             }
 
-updatePermission : TrimmedForm -> String -> Session -> Task Http.Error (Http.Metadata, MaybeSuccess Permission)
-updatePermission (Trimmed form) name session =
+updateGroup : TrimmedForm -> String -> Session -> Task Http.Error (Http.Metadata, MaybeSuccess Group)
+updateGroup (Trimmed form) name session =
     let
         maybeCred =
             Session.cred session
@@ -349,9 +305,9 @@ updatePermission (Trimmed form) name session =
         Http.task
             { method = "PUT"
             , headers = Api.headers maybeCred
-            , url = Api.url [ "permission", name ] []
+            , url = Api.url [ "group", name ] []
             , body = body
-            , resolver = Api.jsonResolver Permission.decoder
+            , resolver = Api.jsonResolver Group.decoder
             , timeout = Nothing
             }
 
@@ -359,16 +315,15 @@ updatePermission (Trimmed form) name session =
 
 type Msg
     = GotSession Session
-    | CompletedPermissionsLoad (Result Http.Error (Http.Metadata, MaybeSuccess (List Permission)))
-    | CompletedPermissionLoad (Result Http.Error (Http.Metadata, MaybeSuccess Permission))
+    | CompletedGroupsLoad (Result Http.Error (Http.Metadata, MaybeSuccess (List Group)))
+    | CompletedGroupLoad (Result Http.Error (Http.Metadata, MaybeSuccess Group))
     | ClickedNewButton
     | ClickedUpdateLink String
     | ClickedReadMore Offset
     | EnteredName String
     | EnteredDescription String
-    | EnteredKeyword String
     | SubmittedForm
-    | CompletedSave (Result Http.Error (Http.Metadata, MaybeSuccess Permission))
+    | CompletedSave (Result Http.Error (Http.Metadata, MaybeSuccess Group))
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
@@ -376,67 +331,62 @@ update msg model =
         GotSession session ->
             ( { model | session = session }, Cmd.none )
 
-        CompletedPermissionsLoad (Ok (_, res)) ->
+        CompletedGroupsLoad (Ok (_, res)) ->
             case res of
-                Success permissions ->
+                Success groups ->
                     ( { model
-                          | permissions =
-                              Loaded (case model.permissions of
+                          | groups =
+                              Loaded (case model.groups of
                                           Loaded ps ->
-                                              (List.append ps permissions)
+                                              (List.append ps groups)
                                           _ ->
-                                              permissions
+                                              groups
                                      )
-                          , offset = Offset (((\(Offset o) -> o) model.offset ) + (List.length permissions))
-                          , readMore = (List.length permissions) >= pageSize
+                          , offset = Offset (((\(Offset o) -> o) model.offset ) + (List.length groups))
                       }
                     , Cmd.none )
                 Failure problem ->
                     case problem.status of
                         401 ->
-                            ( { model | permissions = Failed }
+                            ( { model | groups = Failed }
                             , Route.replaceUrl (Session.navKey model.session) Route.SignIn)
                         _ ->
                             ( { model | problems = [ServerError "server error"] }, Cmd.none )
 
-        CompletedPermissionsLoad (Err err) ->
-            ( { model | permissions = Failed }, Cmd.none )
+        CompletedGroupsLoad (Err err) ->
+            ( { model | groups = Failed }, Cmd.none )
 
-        CompletedPermissionLoad (Ok (_, res)) ->
+        CompletedGroupLoad (Ok (_, res)) ->
             case res of
-                Success permission ->
+                Success group ->
                     ( { model
-                          | targetPermission = Just permission
+                          | targetGroup = Just group
                           , form =
-                            { name = permission.name
-                            , description = permission.description
+                            { name = group.name
+                            , description = group.description
                             }
                           , mode = EditMode }, Cmd.none )
                 Failure problem ->
                     case problem.status of
                         401 ->
-                            ( { model | permissions = Failed }
+                            ( { model | groups = Failed }
                             , Route.replaceUrl (Session.navKey model.session) Route.SignIn)
                         _ ->
                             ( { model | problems = [ServerError "server error"] }, Cmd.none )
 
-        CompletedPermissionLoad (Err err) ->
+        CompletedGroupLoad (Err err) ->
             ( model, Cmd.none )
 
         ClickedNewButton ->
-            ( { model | targetPermission = Nothing, mode = EditMode }
+            ( { model | targetGroup = Nothing, mode = EditMode }
             , Cmd.none
             )
 
         ClickedUpdateLink name ->
-            ( model, Task.attempt CompletedPermissionLoad ( fetchPermission name model.session ))
+            ( model, Task.attempt CompletedGroupLoad ( fetchGroup name model.session ))
 
         ClickedReadMore offset ->
-            ( model, Task.attempt CompletedPermissionsLoad ( fetchPermissions (SearchParams (Just offset) pageSize (Just model.searchForm.keyword)) model.session ))
-
-        EnteredKeyword keyword ->
-            ( { model | searchForm = { keyword = keyword }, permissions = Loading }
-            , Task.attempt CompletedPermissionsLoad ( fetchPermissions (SearchParams (Just (Offset 0)) pageSize (Just keyword)) model.session ))
+            ( model, Task.attempt CompletedGroupsLoad ( fetchGroups offset model.session ))
 
         EnteredName name ->
             updateForm (\form -> { form | name = name }) model
@@ -449,11 +399,11 @@ update msg model =
                 Ok validForm ->
                     ( { model | problems = [] }
                     , Task.attempt CompletedSave <|
-                        case model.targetPermission of
-                            Just permission ->
-                                updatePermission validForm permission.name model.session
+                        case model.targetGroup of
+                            Just group ->
+                                updateGroup validForm group.name model.session
                             Nothing ->
-                                createPermission validForm model.session
+                                createGroup validForm model.session
                     )
                 Err problems ->
                     ( { model | problems = problems }
@@ -462,10 +412,10 @@ update msg model =
 
         CompletedSave (Ok (_, res)) ->
             case res of
-                Success permission ->
+                Success group ->
                     ( { model | mode = ListMode }
-                    , fetchPermissions (SearchParams (Just model.offset) pageSize Nothing) model.session
-                        |> Task.attempt CompletedPermissionsLoad)
+                    , fetchGroups model.offset model.session
+                        |> Task.attempt CompletedGroupsLoad)
                 Failure problem ->
                     ( { model | problems = [ ServerError "server error" ] }, Cmd.none )
 

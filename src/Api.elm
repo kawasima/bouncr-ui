@@ -4,7 +4,7 @@ import Url.Builder exposing (QueryParameter, string)
 import Browser
 import Browser.Navigation as Nav
 import Http exposing (Body, Expect)
-import Json.Decode as Decode exposing (Decoder, Value, decodeString, field, string)
+import Json.Decode as Decode exposing (Decoder, Value, decodeString, field, string, map)
 import Json.Decode.Pipeline as Pipeline exposing (optional, required)
 import Json.Encode as Encode
 import Url exposing (Url)
@@ -20,9 +20,15 @@ url paths queryParams =
 
 -- Problem
 
+type alias Violation =
+    { field : String
+    , message : String
+    }
+
 type alias Problem =
     { type_ : String
     , status : Int
+    , violations : Maybe (List Violation)
     }
 -- CRED
 
@@ -57,7 +63,6 @@ headers maybeCred =
     List.concat
         [
          [ Http.header "accept" "application/json"
-         , Http.header "content-type" "application/json"
          ]
         , case maybeCred of
               Just cred -> [ credHeader cred ]
@@ -173,11 +178,18 @@ decoderFromCred decoder =
         decoder
         credDecoder
 
+violationDecoder : Decoder Violation
+violationDecoder =
+    Decode.succeed Violation
+        |> required "field" Decode.string
+        |> required "message" Decode.string
+
 problemDecoder : Decoder Problem
 problemDecoder =
     Decode.succeed Problem
         |> required "type" Decode.string
         |> required "status" Decode.int
+        |> optional "violations" (map Just (Decode.list violationDecoder)) Nothing
 
 type MaybeSuccess a
     = Success a
@@ -205,13 +217,19 @@ jsonResolver decoder =
                         Err err ->
                             Err (Http.BadBody (Decode.errorToString err))
 
-                Http.GoodStatus_ metadata body ->
-                    case Decode.decodeString decoder body of
-                        Ok value ->
-                            Ok (metadata, Success value)
+                Http.GoodStatus_ metadata body_ ->
+                    let
+                        body = if String.isEmpty body_ then
+                                   "{}"
+                               else
+                                   body_
+                    in
+                        case Decode.decodeString decoder body of
+                            Ok value ->
+                                Ok (metadata, Success value)
 
-                        Err err ->
-                            Err (Http.BadBody (Decode.errorToString err))
+                            Err err ->
+                                Err (Http.BadBody (Decode.errorToString err))
 
 -- ERRORS
 

@@ -37,7 +37,7 @@ type alias SignUpResponse =
     }
 
 type Problem
-    = InvalidEntry ValidatedField String
+    = InvalidEntry (Maybe ValidatedField) String
     | ServerError String
 
 init : Session -> ( Model, Cmd msg )
@@ -67,7 +67,7 @@ view model =
                   [ h1 [ class "text-xs-center" ] [ text "Sign up" ]
                   , p [ class "text-cs-center" ]
                       [ a [ Route.href Route.SignIn ]
-                        [ text "Hav an account?" ]
+                        [ text "Have an account?" ]
                       ]
                   , ul [ class "error-messages" ]
                       (List.map viewProblem model.problems)
@@ -128,7 +128,10 @@ viewProblem problem =
     let
         errorMessage =
             case problem of
-                InvalidEntry _ str ->
+                InvalidEntry (Just _) str ->
+                    str
+
+                InvalidEntry Nothing str ->
                     str
 
                 ServerError str ->
@@ -175,7 +178,7 @@ update msg model =
             updateForm (\form -> { form | password = password }) model
 
         CompletedSignUp (Err error) ->
-            ( { model | problems = [] }, Cmd.none )
+            ( { model | problems = [ ServerError "server error" ] }, Cmd.none )
 
         CompletedSignUp (Ok (_, res)) ->
             case res of
@@ -183,7 +186,16 @@ update msg model =
                     ( model
                     , Task.attempt CompletedChangeInitialPassword (changePassword signUpResponse model.form.password))
                 Failure problem ->
-                    ( model, Cmd.none )
+                    ( { model | problems = case problem.violations of
+                                               Just violations ->
+                                                   List.map (\v -> InvalidEntry (case v.field of
+                                                                                     "account" -> Just Account
+                                                                                     "email" -> Just Email
+                                                                                     _ -> Nothing)
+                                                                 v.message) violations
+                                               Nothing ->
+                                                   []
+                      }, Cmd.none )
 
         CompletedChangeInitialPassword (Err error) ->
             ( { model | problems = [] }, Cmd.none )
@@ -250,7 +262,7 @@ validate form =
 
 validateField : TrimmedForm -> ValidatedField -> List Problem
 validateField (Trimmed form) field =
-    List.map (InvalidEntry field) <|
+    List.map (InvalidEntry (Just field)) <|
         case field of
             Account ->
                 if String.isEmpty form.account then
