@@ -20,6 +20,7 @@ import Page.GroupAdmin as GroupAdmin
 import Page.ApplicationAdmin as ApplicationAdmin
 import Page.RoleAdmin as RoleAdmin
 import Page.PermissionAdmin as PermissionAdmin
+import Page.Audit as Audit
 import Route exposing (Route)
 import Session exposing (Session)
 import Task exposing (Task)
@@ -42,6 +43,7 @@ type Model
     | ApplicationAdmin ApplicationAdmin.Model
     | RoleAdmin RoleAdmin.Model
     | PermissionAdmin PermissionAdmin.Model
+    | Audit Audit.Model
 
 -- MODEL
 
@@ -104,6 +106,9 @@ view model =
             PermissionAdmin permissionAdmin ->
                 viewPage Page.Other GotPermissionAdminMsg (PermissionAdmin.view permissionAdmin)
 
+            Audit audit ->
+                viewPage Page.Other GotAuditMsg (Audit.view audit)
+
 -- HTTP
 
 signOut : Session -> Task Http.Error (Http.Metadata, MaybeSuccess ())
@@ -142,6 +147,7 @@ type Msg
     | GotApplicationAdminMsg ApplicationAdmin.Msg
     | GotRoleAdminMsg RoleAdmin.Msg
     | GotPermissionAdminMsg PermissionAdmin.Msg
+    | GotAuditMsg Audit.Msg
     | GotSession Session
     | SignedOut (Result Http.Error (Http.Metadata, MaybeSuccess ()))
 
@@ -186,6 +192,9 @@ toSession page =
 
         PermissionAdmin permissionAdmin ->
             PermissionAdmin.toSession permissionAdmin
+
+        Audit audit ->
+            Audit.toSession audit
 
 changeRouteTo : Maybe Route -> Model -> ( Model, Cmd Msg )
 changeRouteTo maybeRoute model =
@@ -250,6 +259,10 @@ changeRouteTo maybeRoute model =
             Just Route.PermissionAdmin ->
                 PermissionAdmin.init session
                     |> updateWith PermissionAdmin GotPermissionAdminMsg model
+
+            Just Route.Audit ->
+                Audit.init session
+                    |> updateWith Audit GotAuditMsg model
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
@@ -320,6 +333,10 @@ update msg model =
             PermissionAdmin.update subMsg permissionAdmin
                 |> updateWith PermissionAdmin GotPermissionAdminMsg model
 
+        ( GotAuditMsg subMsg, Audit audit ) ->
+            Audit.update subMsg audit
+                |> updateWith Audit GotAuditMsg model
+
         ( GotSession session, Redirect _ ) ->
             (Redirect session
             , Route.replaceUrl (Session.navKey session) Route.Home
@@ -380,6 +397,9 @@ subscriptions model =
 
         PermissionAdmin permissionAdmin ->
             Sub.map GotPermissionAdminMsg (PermissionAdmin.subscriptions permissionAdmin)
+
+        Audit audit ->
+            Sub.map GotAuditMsg (Audit.subscriptions audit)
 
 -- MAIN
 

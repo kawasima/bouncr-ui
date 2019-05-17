@@ -15,7 +15,7 @@ import Session exposing (Session)
 import Route
 import Task exposing (Task)
 import Time
-import Url.Builder exposing (int)
+import Url.Builder exposing (int, string)
 import Model.Group as Group exposing (Group)
 import Account exposing (Account)
 import Viewer
@@ -29,7 +29,9 @@ type alias Model =
     , groups: Status (List Group)
     , targetGroup : Maybe Group
     , mode : Mode
+    , readMore : Bool
     , form : Form
+    , searchForm : SearchForm
     , offset: Offset
     , problems : List Problem
     }
@@ -48,12 +50,21 @@ type alias Form =
     , description : String
     }
 
+type alias SearchForm =
+    { keyword : String }
+
 type Problem
     = InvalidEntry ValidatedField String
     | ServerError String
 
 type Offset
     = Offset Int
+
+type alias SearchParams =
+    { offset: Maybe Offset
+    , limit: Int
+    , q : Maybe String
+    }
 
 init : Session -> ( Model, Cmd Msg )
 init session =
@@ -62,14 +73,16 @@ init session =
       , targetGroup = Nothing
       , mode = ListMode
       , offset = Offset 0
+      , readMore = True
       , form =
           { name = ""
           , description = ""
           }
+      , searchForm = { keyword = "" }
       , problems = []
       }
     , Cmd.batch
-        [ fetchGroups (Offset 0) session
+        [ fetchGroups (SearchParams (Just (Offset 0)) pageSize Nothing) session
             |> Task.attempt CompletedGroupsLoad
         ]
     )
@@ -96,11 +109,23 @@ viewList : Model -> Html Msg
 viewList model =
     div []
         [ div [ class "row" ]
-              [ button
-                    [ class "btn btn-primary"
-                    , onClick ClickedNewButton
-                    ]
-                    [ text "New" ] ]
+          [ div [ class "col-sm-6" ]
+            [ Html.form [ class "form-inline"
+                        , onSubmit ClickedNewButton ]
+              [ button [ class "btn btn-primary" ]
+                [ text "New" ]
+              ]
+            ]
+          , div [ class "col-sm-6" ]
+              [ input
+                    [ type_ "text"
+                    , class "form-control"
+                    , placeholder "Search..."
+                    , onInput EnteredKeyword
+                    , value model.searchForm.keyword ]
+                    [ ]
+              ]
+            ]
         , div [ class "row" ] <|
             case model.groups of
                 Loading -> []
@@ -115,21 +140,24 @@ viewList model =
                       , tbody []
                           (List.append
                               (List.map viewGroup groups)
-                              [ tr []
-                                    [ td []
-                                          [ a [ custom "click"
-                                                    (Decode.succeed
-                                                         { stopPropagation = False
-                                                         , preventDefault = True
-                                                         , message = (ClickedReadMore model.offset)
-                                                         }
-                                                    )
-                                              , href "#/group_admin"
-                                              ]
-                                                [ text "Read more" ]
-                                          ]
-                                    ]
-                              ]
+                              (if model.readMore then
+                                   [ tr []
+                                     [ td []
+                                       [ span [ custom "click"
+                                                 (Decode.succeed
+                                                      { stopPropagation = True
+                                                      , preventDefault = True
+                                                      , message = (ClickedReadMore model.offset)
+                                                      }
+                                                 )
+                                           , href "#/group_admin"
+                                           ]
+                                             [ text "Read more" ]
+                                       ]
+                                     ]
+                                   ]
+                               else
+                                   [])
                           )
 
                       ]
@@ -235,19 +263,33 @@ trimFields form =
 
 -- HTTP
 
-fetchGroups: Offset -> Session -> Task Http.Error (Http.Metadata, MaybeSuccess (List Group))
-fetchGroups (Offset offset) session =
+fetchGroups: SearchParams -> Session -> Task Http.Error (Http.Metadata, MaybeSuccess (List Group))
+fetchGroups params session =
     let
         maybeCred =
             Session.cred session
 
         decoder =
             Decode.list Group.decoder
+
+        query = List.concat
+                [ [ int "limit" params.limit ]
+                , case params.offset of
+                      Just (Offset offset) ->
+                          [ int "offset" offset ]
+                      Nothing ->
+                          []
+                , case  params.q of
+                      Just q ->
+                          [ string "q" q ]
+                      Nothing ->
+                          []
+                ]
     in
         Http.task
             { method = "GET"
             , headers = Api.headers maybeCred
-            , url = Api.url ["groups"] [ int "offset" offset ]
+            , url = Api.url ["groups"] query
             , body = Http.emptyBody
             , resolver = Api.jsonResolver decoder
             , timeout = Nothing
@@ -322,6 +364,7 @@ type Msg
     | ClickedReadMore Offset
     | EnteredName String
     | EnteredDescription String
+    | EnteredKeyword String
     | SubmittedForm
     | CompletedSave (Result Http.Error (Http.Metadata, MaybeSuccess Group))
 
@@ -343,6 +386,7 @@ update msg model =
                                               groups
                                      )
                           , offset = Offset (((\(Offset o) -> o) model.offset ) + (List.length groups))
+                          , readMore = (List.length groups) >= pageSize
                       }
                     , Cmd.none )
                 Failure problem ->
@@ -386,7 +430,11 @@ update msg model =
             ( model, Task.attempt CompletedGroupLoad ( fetchGroup name model.session ))
 
         ClickedReadMore offset ->
-            ( model, Task.attempt CompletedGroupsLoad ( fetchGroups offset model.session ))
+            ( model, Task.attempt CompletedGroupsLoad ( fetchGroups (SearchParams (Just offset) pageSize (Just model.searchForm.keyword)) model.session ))
+
+        EnteredKeyword keyword ->
+            ( { model | searchForm = { keyword = keyword }, groups = Loading }
+            , Task.attempt CompletedGroupsLoad ( fetchGroups (SearchParams (Just (Offset 0)) pageSize (Just keyword)) model.session ))
 
         EnteredName name ->
             updateForm (\form -> { form | name = name }) model
@@ -414,7 +462,7 @@ update msg model =
             case res of
                 Success group ->
                     ( { model | mode = ListMode }
-                    , fetchGroups model.offset model.session
+                    , fetchGroups (SearchParams (Just model.offset) pageSize Nothing) model.session
                         |> Task.attempt CompletedGroupsLoad)
                 Failure problem ->
                     ( { model | problems = [ ServerError "server error" ] }, Cmd.none )

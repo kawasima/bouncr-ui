@@ -26,6 +26,7 @@ type Route
     | ApplicationAdmin
     | RoleAdmin
     | PermissionAdmin
+    | Audit
 
 parser : Parser (Route -> a) a
 parser =
@@ -42,6 +43,7 @@ parser =
         , Parser.map ApplicationAdmin (s "application_admin")
         , Parser.map RoleAdmin (s "role_admin")
         , Parser.map PermissionAdmin (s "permission_admin")
+        , Parser.map Audit (s "audit")
         ]
 
 -- PUBLIC HELPERS
@@ -116,6 +118,9 @@ routeToString page =
 
                 PermissionAdmin ->
                     [ "permission_admin" ]
+
+                Audit ->
+                    [ "audit" ]
 
     in
     "#/" ++ String.join "/" pieces

@@ -29,7 +29,9 @@ type alias Model =
     , applications: Status (List Application)
     , targetApplication : Maybe Application
     , mode : Mode
+    , readMore : Bool
     , form : Form
+    , searchForm : SearchForm
     , offset: Offset
     , problems : List Problem
     }
@@ -48,12 +50,21 @@ type alias Form =
     , description : String
     }
 
+type alias SearchForm =
+    { keyword : String }
+
 type Problem
     = InvalidEntry ValidatedField String
     | ServerError String
 
 type Offset
     = Offset Int
+
+type alias SearchParams =
+    { offset: Maybe Offset
+    , limit: Int
+    , q : Maybe String
+    }
 
 init : Session -> ( Model, Cmd Msg )
 init session =
@@ -62,14 +73,16 @@ init session =
       , targetApplication = Nothing
       , mode = ListMode
       , offset = Offset 0
+      , readMore = True
       , form =
           { name = ""
           , description = ""
           }
+      , searchForm = { keyword = "" }
       , problems = []
       }
     , Cmd.batch
-        [ fetchApplications (Offset 0) session
+        [ fetchApplications (SearchParams (Just (Offset 0)) pageSize Nothing) session
             |> Task.attempt CompletedApplicationsLoad
         ]
     )
@@ -96,11 +109,23 @@ viewList : Model -> Html Msg
 viewList model =
     div []
         [ div [ class "row" ]
-              [ button
-                    [ class "btn btn-primary"
-                    , onClick ClickedNewButton
-                    ]
-                    [ text "New" ] ]
+          [ div [ class "col-sm-6" ]
+            [ Html.form [ class "form-inline"
+                        , onSubmit ClickedNewButton ]
+              [ button [ class "btn btn-primary" ]
+                [ text "New" ]
+              ]
+            ]
+          , div [ class "col-sm-6" ]
+              [ input
+                [ type_ "text"
+                , class "form-control"
+                , placeholder "Search..."
+                , onInput EnteredKeyword
+                , value model.searchForm.keyword ]
+                    [ ]
+              ]
+          ]
         , div [ class "row" ] <|
             case model.applications of
                 Loading -> []
@@ -116,21 +141,25 @@ viewList model =
                       , tbody []
                           (List.append
                               (List.map viewApplication applications)
-                              [ tr []
-                                    [ td []
-                                          [ a [ custom "click"
-                                                    (Decode.succeed
-                                                         { stopPropagation = False
-                                                         , preventDefault = True
-                                                         , message = (ClickedReadMore model.offset)
-                                                         }
-                                                    )
-                                              , href "#/application_admin"
-                                              ]
-                                                [ text "Read more" ]
-                                          ]
-                                    ]
-                              ]
+                              (if model.readMore then
+                                   [ tr []
+                                     [ td []
+                                       [ span
+                                         [ custom "click"
+                                               (Decode.succeed
+                                                    { stopPropagation = True
+                                                    , preventDefault = True
+                                                    , message = (ClickedReadMore model.offset)
+                                                    }
+                                               )
+                                         , href "#/application_admin"
+                                         ]
+                                             [ text "Read more" ]
+                                       ]
+                                     ]
+                                   ]
+                               else
+                                   [])
                           )
 
                       ]
@@ -238,19 +267,34 @@ trimFields form =
 
 -- HTTP
 
-fetchApplications: Offset -> Session -> Task Http.Error (Http.Metadata, MaybeSuccess (List Application))
-fetchApplications (Offset offset) session =
+fetchApplications: SearchParams -> Session -> Task Http.Error (Http.Metadata, MaybeSuccess (List Application))
+fetchApplications params session =
     let
         maybeCred =
             Session.cred session
 
         decoder =
             Decode.list Application.decoder
+
+        query = List.concat
+                [ [ int "limit" params.limit ]
+                , [ string "embed" "(realms)" ]
+                , case params.offset of
+                      Just (Offset offset) ->
+                          [ int "offset" offset ]
+                      Nothing ->
+                          []
+                , case  params.q of
+                      Just q ->
+                          [ string "q" q ]
+                      Nothing ->
+                          []
+                ]
     in
         Http.task
             { method = "GET"
             , headers = Api.headers maybeCred
-            , url = Api.url ["applications"] [ int "offset" offset, string "embed" "(realms)" ]
+            , url = Api.url ["applications"] query
             , body = Http.emptyBody
             , resolver = Api.jsonResolver decoder
             , timeout = Nothing
@@ -325,6 +369,7 @@ type Msg
     | ClickedReadMore Offset
     | EnteredName String
     | EnteredDescription String
+    | EnteredKeyword String
     | SubmittedForm
     | CompletedSave (Result Http.Error (Http.Metadata, MaybeSuccess Application))
 
@@ -346,6 +391,7 @@ update msg model =
                                               applications
                                      )
                           , offset = Offset (((\(Offset o) -> o) model.offset ) + (List.length applications))
+                          , readMore = (List.length applications) >= pageSize
                       }
                     , Cmd.none )
                 Failure problem ->
@@ -389,7 +435,11 @@ update msg model =
             ( model, Task.attempt CompletedApplicationLoad ( fetchApplication name model.session ))
 
         ClickedReadMore offset ->
-            ( model, Task.attempt CompletedApplicationsLoad ( fetchApplications offset model.session ))
+            ( model, Task.attempt CompletedApplicationsLoad ( fetchApplications (SearchParams (Just offset) pageSize (Just model.searchForm.keyword)) model.session ))
+
+        EnteredKeyword keyword ->
+            ( { model | searchForm = { keyword = keyword }, applications = Loading }
+            , Task.attempt CompletedApplicationsLoad ( fetchApplications (SearchParams (Just (Offset 0)) pageSize (Just keyword)) model.session ))
 
         EnteredName name ->
             updateForm (\form -> { form | name = name }) model
@@ -417,7 +467,7 @@ update msg model =
             case res of
                 Success application ->
                     ( { model | mode = ListMode }
-                    , fetchApplications model.offset model.session
+                    , fetchApplications (SearchParams (Just model.offset) pageSize Nothing) model.session
                         |> Task.attempt CompletedApplicationsLoad)
                 Failure problem ->
                     ( { model | problems = [ ServerError "server error" ] }, Cmd.none )

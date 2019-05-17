@@ -32,7 +32,7 @@ type alias Model =
     , readMore : Bool
     , form : Form
     , searchForm : SearchForm
-    , offset: Offset
+    , offset : Offset
     , problems : List Problem
     }
 
@@ -110,12 +110,10 @@ viewList model =
     div []
         [ div [ class "row" ]
           [ div [ class "col-sm-6" ]
-            [ Html.form [ class "form-inline" ]
-              [ button
-                [ class "btn btn-primary"
-                , onClick ClickedNewButton
-                ]
-                    [ text "New" ]
+            [ Html.form [ class "form-inline"
+                        , onSubmit ClickedNewButton ]
+              [ button [ class "btn btn-primary" ]
+                [ text "New" ]
               ]
             ]
           , div [ class "col-sm-6" ]
@@ -145,9 +143,9 @@ viewList model =
                               (if model.readMore then
                                    [ tr []
                                      [ td []
-                                       [ a [ custom "click"
+                                       [ span [ custom "click"
                                                  (Decode.succeed
-                                                      { stopPropagation = False
+                                                      { stopPropagation = True
                                                       , preventDefault = True
                                                       , message = (ClickedReadMore model.offset)
                                                       }
@@ -181,7 +179,7 @@ viewRole role =
                     )
               , href "#/role_admin"
               ]
-           [ text role.name ]
+                [ text role.name ]
           ]
         , td [ ]
             [ text role.description ]
@@ -287,7 +285,6 @@ fetchRoles params session =
                       Nothing ->
                           []
                 ]
-
     in
         Http.task
             { method = "GET"
@@ -383,8 +380,8 @@ update msg model =
                     ( { model
                           | roles =
                               Loaded (case model.roles of
-                                          Loaded ps ->
-                                              (List.append ps roles)
+                                          Loaded rs ->
+                                              (List.append rs roles)
                                           _ ->
                                               roles
                                      )

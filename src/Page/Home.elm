@@ -4,8 +4,8 @@ import Api exposing (Cred, MaybeSuccess(..))
 import Api.Endpoint as Endpoint
 import Browser.Dom as Dom
 import Html exposing (..)
-import Html.Attributes exposing (attribute, class, classList, href, placeholder, for, src)
-import Html.Events exposing (onClick, onSubmit)
+import Html.Attributes exposing (..)
+import Html.Events exposing (..)
 import Http
 import Json.Decode as Decode
 import Loading
@@ -153,6 +153,7 @@ viewAdminMenu permissions =
             , viewApplicationAdmin permissions
             , viewRoleAdmin permissions
             , viewPermissionAdmin permissions
+            , viewAudit permissions
             ]
 
 viewUserAdmin : List String -> List (Html Msg)
@@ -197,6 +198,15 @@ viewPermissionAdmin : List String -> List (Html Msg)
 viewPermissionAdmin permissions =
     if List.any (\a -> a == "any_permission:read" || a == "permission:read")  permissions then
         [ a [ Route.href Route.PermissionAdmin ] [ text "Permission"]
+        , br [] []
+        ]
+    else
+        []
+
+viewAudit : List String -> List (Html Msg)
+viewAudit permissions =
+    if List.any (\a -> a == "any_user:read") permissions then
+        [ a [ Route.href Route.Audit ] [ text "Audit"]
         , br [] []
         ]
     else

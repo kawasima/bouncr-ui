@@ -110,12 +110,10 @@ viewList model =
     div []
         [ div [ class "row" ]
           [ div [ class "col-sm-6" ]
-            [ Html.form [ class "form-inline" ]
-              [ button
-                [ class "btn btn-primary"
-                , onClick ClickedNewButton
-                ]
-                    [ text "New" ]
+            [ Html.form [ class "form-inline"
+                        , onSubmit ClickedNewButton ]
+              [ button [ class "btn btn-primary" ]
+                [ text "New" ]
               ]
             ]
           , div [ class "col-sm-6" ]
