@@ -132,7 +132,13 @@ viewProfiles user =
               [ div [ class "col-md-6" ]
                     [ label [ for "email" ] [ text "Email" ] ]
               , div [ class "col-md-6" ]
-                    [ text user.email ]
+                    [ span []
+                      [ text user.email
+                      , if List.member "email" user.unverifiedProfiles then
+                            span [ class "badge badge-danger" ] [ text "unverified" ]
+                        else
+                            span [ class "badge badge-success" ] [ text "verified" ]
+                        ]]
               ]
         ]
 
@@ -140,9 +146,11 @@ viewUserMenu : Html Msg
 viewUserMenu =
     div [ class "profile-work" ] <|
         List.concat
-            [ [ a [ Route.href Route.ChangePassword ]
-                [ text "Change password" ] ]
+            [ [ a [ Route.href Route.ChangePassword ] [ text "Change password" ] ]
+            , [ br [] [] ]
+            , [ a [ Route.href  Route.ChangeProfile ]  [ text "Change profile" ] ]
             ]
+
 viewAdminMenu : List String -> Html Msg
 viewAdminMenu permissions =
     div [ class "profile-work" ] <|

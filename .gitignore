@@ -4,3 +4,7 @@ elm-stuff
 repl-temp-*
 
 elm.js
+node_modules/
+cypress/
+cypress.json
+dist/

@@ -28,7 +28,7 @@ viewHeader page maybeViewer =
         [ div [ class "container" ]
             [ a [ class "navbar-brand", Route.href Route.Home ]
                 [ text "Bouncr" ]
-            , ul [ class "nav navbar-nav pull-xs-right" ] <|
+            , ul [ class "nav pull-xs-right" ] <|
                 navbarLink page Route.Home [ text "Home" ]
                     :: viewMenu page maybeViewer
             ]

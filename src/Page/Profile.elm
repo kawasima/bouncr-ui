@@ -1,4 +1,4 @@
-module Page.Profile exposing (Model, Msg, decoder, init, update, viewProfiles)
+module Page.ChangeProfile exposing (Model, Msg, decoder, init, update, viewProfiles)
 
 import Api exposing (Cred)
 import Html exposing (..)

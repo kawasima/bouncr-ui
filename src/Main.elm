@@ -11,8 +11,10 @@ import Page.Blank as Blank
 import Page.NotFound as NotFound
 import Page.Home as Home
 import Page.SignIn as SignIn
+import Page.SignInByOidc as SignInByOidc
 import Page.SignUp as SignUp
 import Page.ChangePassword as ChangePassword
+import Page.ChangeProfile as ChangeProfile
 import Page.ResetPasswordChallenge as ResetPasswordChallenge
 import Page.ResetPassword as ResetPassword
 import Page.UserAdmin as UserAdmin
@@ -21,6 +23,7 @@ import Page.ApplicationAdmin as ApplicationAdmin
 import Page.RoleAdmin as RoleAdmin
 import Page.PermissionAdmin as PermissionAdmin
 import Page.Audit as Audit
+import Page.EmailVerification as EmailVerification
 import Route exposing (Route)
 import Session exposing (Session)
 import Task exposing (Task)
@@ -34,8 +37,10 @@ type Model
     | NotFound Session
     | Home Home.Model
     | SignIn SignIn.Model
+    | SignInByOidc SignInByOidc.Model
     | SignUp SignUp.Model
     | ChangePassword ChangePassword.Model
+    | ChangeProfile ChangeProfile.Model
     | ResetPasswordChallenge ResetPasswordChallenge.Model
     | ResetPassword ResetPassword.Model
     | UserAdmin UserAdmin.Model
@@ -44,6 +49,7 @@ type Model
     | RoleAdmin RoleAdmin.Model
     | PermissionAdmin PermissionAdmin.Model
     | Audit Audit.Model
+    | EmailVerification EmailVerification.Model
 
 -- MODEL
 
@@ -79,11 +85,17 @@ view model =
             SignIn signIn ->
                 viewPage Page.Other GotSignInMsg (SignIn.view signIn)
 
+            SignInByOidc signInByOidc ->
+                viewPage Page.Other GotSignInByOidcMsg (SignInByOidc.view signInByOidc)
+
             SignUp signUp ->
                 viewPage Page.Other GotSignUpMsg (SignUp.view signUp)
 
             ChangePassword changePassword ->
                 viewPage Page.Other GotChangePasswordMsg (ChangePassword.view changePassword)
+
+            ChangeProfile changeProfile ->
+                viewPage Page.Other GotChangeProfileMsg (ChangeProfile.view changeProfile)
 
             ResetPasswordChallenge resetPasswordChallenge ->
                 viewPage Page.Other GotResetPasswordChallengeMsg (ResetPasswordChallenge.view resetPasswordChallenge)
@@ -109,6 +121,9 @@ view model =
             Audit audit ->
                 viewPage Page.Other GotAuditMsg (Audit.view audit)
 
+            EmailVerification emailVerification ->
+                viewPage Page.Other GotEmailVerificationMsg (EmailVerification.view emailVerification)
+
 -- HTTP
 
 signOut : Session -> Task Http.Error (Http.Metadata, MaybeSuccess ())
@@ -120,7 +135,7 @@ signOut session =
                     Just t -> t
                     Nothing -> Api.credFromToken("dummy") -- FIXME
     in
-    Http.task
+    Http.riskyTask
         { method = "DELETE"
         , headers = Api.headers maybeCred
         , url = Api.url ["session", Api.token(token) ] []
@@ -138,8 +153,10 @@ type Msg
     | ClickedLink Browser.UrlRequest
     | GotHomeMsg Home.Msg
     | GotSignInMsg SignIn.Msg
+    | GotSignInByOidcMsg SignInByOidc.Msg
     | GotSignUpMsg SignUp.Msg
     | GotChangePasswordMsg ChangePassword.Msg
+    | GotChangeProfileMsg ChangeProfile.Msg
     | GotResetPasswordChallengeMsg ResetPasswordChallenge.Msg
     | GotResetPasswordMsg ResetPassword.Msg
     | GotUserAdminMsg UserAdmin.Msg
@@ -148,6 +165,7 @@ type Msg
     | GotRoleAdminMsg RoleAdmin.Msg
     | GotPermissionAdminMsg PermissionAdmin.Msg
     | GotAuditMsg Audit.Msg
+    | GotEmailVerificationMsg EmailVerification.Msg
     | GotSession Session
     | SignedOut (Result Http.Error (Http.Metadata, MaybeSuccess ()))
 
@@ -166,11 +184,17 @@ toSession page =
         SignIn signIn ->
             SignIn.toSession signIn
 
+        SignInByOidc signInByOidc ->
+            SignInByOidc.toSession signInByOidc
+
         SignUp signUp ->
             SignUp.toSession signUp
 
         ChangePassword changePassword ->
             ChangePassword.toSession changePassword
+
+        ChangeProfile changeProfile ->
+            ChangeProfile.toSession changeProfile
 
         ResetPasswordChallenge resetPasswordChallenge ->
             ResetPasswordChallenge.toSession resetPasswordChallenge
@@ -196,6 +220,9 @@ toSession page =
         Audit audit ->
             Audit.toSession audit
 
+        EmailVerification emailVerification ->
+            EmailVerification.toSession emailVerification
+
 changeRouteTo : Maybe Route -> Model -> ( Model, Cmd Msg )
 changeRouteTo maybeRoute model =
     let
@@ -220,13 +247,33 @@ changeRouteTo maybeRoute model =
                 SignIn.init session
                     |> updateWith SignIn GotSignInMsg model
 
-            Just Route.SignUp ->
-                SignUp.init session
+            Just (Route.SignInByOidc maybeAccount maybeToken) ->
+                let
+                    account = case maybeAccount of
+                                  Just acc -> acc
+                                  Nothing  -> ""
+                    token = case maybeToken of
+                                Just t -> t
+                                Nothing  -> ""
+                in
+                    SignInByOidc.init account token session
+                        |> updateWith SignInByOidc GotSignInByOidcMsg model
+
+            Just (Route.SignUp maybeCode) ->
+                (SignUp.init
+                     (case maybeCode of
+                          Just code -> code
+                          Nothing -> "")
+                     session )
                     |> updateWith SignUp GotSignUpMsg model
 
             Just Route.ChangePassword ->
                 ChangePassword.init session
                     |> updateWith ChangePassword GotChangePasswordMsg model
+
+            Just Route.ChangeProfile ->
+                ChangeProfile.init session
+                    |> updateWith ChangeProfile GotChangeProfileMsg model
 
             Just Route.ResetPasswordChallenge ->
                 ResetPasswordChallenge.init session
@@ -264,6 +311,14 @@ changeRouteTo maybeRoute model =
                 Audit.init session
                     |> updateWith Audit GotAuditMsg model
 
+            Just (Route.EmailVerification maybeCode) ->
+                (EmailVerification.init
+                     (case maybeCode of
+                         Just code -> code
+                         Nothing -> "")
+                     session )
+                    |> updateWith EmailVerification GotEmailVerificationMsg model
+
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case ( msg, model ) of
@@ -293,6 +348,10 @@ update msg model =
             SignIn.update subMsg signIn
                 |> updateWith SignIn GotSignInMsg model
 
+        ( GotSignInByOidcMsg subMsg, SignInByOidc signInByOidc ) ->
+            SignInByOidc.update subMsg signInByOidc
+                |> updateWith SignInByOidc GotSignInByOidcMsg model
+
         ( GotSignUpMsg subMsg, SignUp signUp ) ->
             SignUp.update subMsg signUp
                 |> updateWith SignUp GotSignUpMsg model
@@ -300,6 +359,10 @@ update msg model =
         ( GotChangePasswordMsg subMsg, ChangePassword changePassword ) ->
             ChangePassword.update subMsg changePassword
                 |> updateWith ChangePassword GotChangePasswordMsg model
+
+        ( GotChangeProfileMsg subMsg, ChangeProfile changeProfile ) ->
+            ChangeProfile.update subMsg changeProfile
+                |> updateWith ChangeProfile GotChangeProfileMsg model
 
         ( GotResetPasswordChallengeMsg subMsg, ResetPasswordChallenge resetPasswordChallenge ) ->
             ResetPasswordChallenge.update subMsg resetPasswordChallenge
@@ -337,6 +400,10 @@ update msg model =
             Audit.update subMsg audit
                 |> updateWith Audit GotAuditMsg model
 
+        ( GotEmailVerificationMsg subMsg, EmailVerification emailVerification ) ->
+            EmailVerification.update subMsg emailVerification
+                |> updateWith EmailVerification GotEmailVerificationMsg model
+
         ( GotSession session, Redirect _ ) ->
             (Redirect session
             , Route.replaceUrl (Session.navKey session) Route.Home
@@ -371,11 +438,17 @@ subscriptions model =
         SignIn signIn ->
             Sub.map GotSignInMsg (SignIn.subscriptions signIn)
 
+        SignInByOidc signInByOidc ->
+            Sub.map GotSignInByOidcMsg (SignInByOidc.subscriptions signInByOidc)
+
         SignUp signUp ->
             Sub.map GotSignUpMsg (SignUp.subscriptions signUp)
 
         ChangePassword changePassword ->
             Sub.map GotChangePasswordMsg (ChangePassword.subscriptions changePassword)
+
+        ChangeProfile changeProfile ->
+            Sub.map GotChangeProfileMsg (ChangeProfile.subscriptions changeProfile)
 
         ResetPasswordChallenge resetPasswordChallenge ->
             Sub.map GotResetPasswordChallengeMsg (ResetPasswordChallenge.subscriptions resetPasswordChallenge)
@@ -400,6 +473,9 @@ subscriptions model =
 
         Audit audit ->
             Sub.map GotAuditMsg (Audit.subscriptions audit)
+
+        EmailVerification emailVerification ->
+            Sub.map GotEmailVerificationMsg (EmailVerification.subscriptions emailVerification)
 
 -- MAIN
 

@@ -23,7 +23,7 @@ decoder : Decoder UserAction
 decoder =
     Decode.succeed UserAction
         |> required "id" (Decode.int)
-        |> required "actionType" Decode.string
+        |> required "action_type" Decode.string
         |> required "actor" Decode.string
         |> required "actor_ip" Decode.string
         |> optional "options" (Decode.map Just Decode.string) Nothing

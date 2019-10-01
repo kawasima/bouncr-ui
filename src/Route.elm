@@ -11,14 +11,15 @@ import Account exposing (Account)
 
 -- ROUTING
 
-
 type Route
     = Home
     | Root
     | SignIn
+    | SignInByOidc (Maybe String) (Maybe String)
     | SignOut
-    | SignUp
+    | SignUp (Maybe String)
     | ChangePassword
+    | ChangeProfile
     | ResetPasswordChallenge
     | ResetPassword (Maybe String)
     | UserAdmin
@@ -27,15 +28,18 @@ type Route
     | RoleAdmin
     | PermissionAdmin
     | Audit
+    | EmailVerification (Maybe String)
 
 parser : Parser (Route -> a) a
 parser =
     oneOf
         [ Parser.map Home Parser.top
         , Parser.map SignIn (s "sign_in")
+        , Parser.map SignInByOidc (s "sign_in_by_oidc" <?> Query.string "account" <?> Query.string "token")
         , Parser.map SignOut (s "sign_out")
-        , Parser.map SignUp (s "sign_up")
+        , Parser.map SignUp (s "sign_up" <?> Query.string "code")
         , Parser.map ChangePassword (s "change_password")
+        , Parser.map ChangeProfile (s "change_profile")
         , Parser.map ResetPasswordChallenge (s "reset_password_challenge")
         , Parser.map ResetPassword (s "reset_password" <?> Query.string "code")
         , Parser.map UserAdmin (s "user_admin")
@@ -44,6 +48,7 @@ parser =
         , Parser.map RoleAdmin (s "role_admin")
         , Parser.map PermissionAdmin (s "permission_admin")
         , Parser.map Audit (s "audit")
+        , Parser.map EmailVerification (s "email_verification" <?> Query.string "code")
         ]
 
 -- PUBLIC HELPERS
@@ -86,14 +91,32 @@ routeToString page =
                 SignIn ->
                     [ "sign_in" ]
 
+                SignInByOidc (Just token) (Just account) ->
+                    [ "sign_in_by_oidc", account, token ]
+
+                SignInByOidc (Just token) Nothing ->
+                    [ "sign_in_by_oidc", token ]
+
+                SignInByOidc Nothing (Just account) ->
+                    [ "sign_in_by_oidc", account ]
+
+                SignInByOidc Nothing Nothing ->
+                    [ "sign_in_by_oidc" ]
+
                 SignOut ->
                     [ "sign_out" ]
 
-                SignUp ->
+                SignUp (Just code) ->
+                    [ "sign_up", code ]
+
+                SignUp Nothing ->
                     [ "sign_up" ]
 
                 ChangePassword ->
                     [ "change_password" ]
+
+                ChangeProfile ->
+                    [ "change_profile" ]
 
                 ResetPasswordChallenge ->
                     [ "reset_password_challenge" ]
@@ -118,6 +141,12 @@ routeToString page =
 
                 PermissionAdmin ->
                     [ "permission_admin" ]
+
+                EmailVerification (Just code) ->
+                    [ "email_verification", code ]
+
+                EmailVerification Nothing ->
+                    [ "email_verification" ]
 
                 Audit ->
                     [ "audit" ]

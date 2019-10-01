@@ -74,7 +74,7 @@ view model =
                 [ div [class "col-md-6 offset-md-3 col-xs-12" ]
                   [ h1 [ class "text-xs-center" ] [ text "Sign in" ]
                   , p [ class "text-xs-center" ]
-                      [ a [ Route.href Route.SignUp ]
+                      [ a [ Route.href (Route.SignUp Nothing) ]
                         [ text "Sign up" ]
                       ]
                   , ul [ class "error-messages" ]
@@ -114,6 +114,7 @@ viewAccountPasswordForm form =
         [ fieldset [ class "form-group" ]
               [ input
                     [ class "form-control form-control-lg"
+                    , id "account"
                     , placeholder "Account"
                     , onInput EnteredAccount
                     , value form.account
@@ -123,6 +124,7 @@ viewAccountPasswordForm form =
         , fieldset [ class "form-group" ]
             [ input
                   [ class "form-control form-control-lg"
+                  , id "password"
                   , type_ "password"
                   , placeholder "Password"
                   , onInput EnteredPassword
@@ -338,7 +340,7 @@ signIn (Trimmed form) =
                  ] ++ code
                 ) |> Http.jsonBody
     in
-        Http.task
+        Http.riskyTask
             { method = "POST"
             , headers = [ Http.header "Accept" "application/json" ]
             , url = Api.url ["sign_in"] []

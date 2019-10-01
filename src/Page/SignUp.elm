@@ -19,6 +19,7 @@ import Viewer exposing (Viewer)
 type alias Model =
     { session : Session
     , problems : List Problem
+    , code : String
     , form : Form
     }
 
@@ -40,10 +41,11 @@ type Problem
     = InvalidEntry (Maybe ValidatedField) String
     | ServerError String
 
-init : Session -> ( Model, Cmd msg )
-init session =
+init : String -> Session -> ( Model, Cmd msg )
+init code session =
     ( { session = session
       , problems = []
+      , code = code
       , form =
           { account = ""
           , name = ""
@@ -63,7 +65,7 @@ view model =
         div [ class "cred-page" ]
             [ div [ class "container page" ]
               [ div [ class "row" ]
-                [ div [ class "col-md-6 offset-md-3 col-xs-12" ]
+                [ div  [class "col-md-6 offset-md-3 col-xs-12" ]
                   [ h1 [ class "text-xs-center" ] [ text "Sign up" ]
                   , p [ class "text-cs-center" ]
                       [ a [ Route.href Route.SignIn ]
@@ -158,7 +160,7 @@ update msg model =
             case validate model.form of
                 Ok validForm ->
                     ( { model | problems = [] }
-                    , Task.attempt CompletedSignUp (signUp validForm)
+                    , Task.attempt CompletedSignUp (signUp validForm model.code )
                     )
                 Err problems ->
                     ( { model | problems = problems }
@@ -312,14 +314,15 @@ signUpResponseDecoder =
 
 -- HTTP
 
-signUp : TrimmedForm -> Task Http.Error (Http.Metadata, MaybeSuccess SignUpResponse)
-signUp (Trimmed form) =
+signUp : TrimmedForm -> String -> Task Http.Error (Http.Metadata, MaybeSuccess SignUpResponse)
+signUp (Trimmed form) code =
     let
         body =
             Encode.object
                 [ ( "account", Encode.string form.account )
                 , ( "name", Encode.string form.name )
                 , ( "email", Encode.string form.email )
+                , ( "code", Encode.string code )
                 ] |> Http.jsonBody
     in
         Http.task

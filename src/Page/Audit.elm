@@ -45,8 +45,8 @@ type Offset
 
 type alias SearchParams =
     { offset: Maybe Offset
-    , limit: Int
-    , q : Maybe String
+    , limit : Int
+    , actor : Maybe String
     }
 
 init : Session -> ( Model, Cmd Msg )
@@ -55,7 +55,7 @@ init session =
       , userActions = Loading
       , offset = Offset 0
       , readMore = True
-      , searchForm = { keyword = "" }
+      , searchForm = { keyword = "*" }
       }
     , Cmd.batch
         [ fetchUserActions (SearchParams (Just (Offset 0)) pageSize Nothing) session
@@ -163,11 +163,11 @@ fetchUserActions params session =
                           [ int "offset" offset ]
                       Nothing ->
                           []
-                , case  params.q of
-                      Just q ->
-                          [ string "q" q ]
+                , case  params.actor of
+                      Just actor ->
+                          [ string "actor" actor ]
                       Nothing ->
-                          []
+                          [ string "actor" "*" ]
                 ]
     in
         Http.task

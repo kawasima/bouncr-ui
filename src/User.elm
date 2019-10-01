@@ -15,6 +15,7 @@ type alias User =
     , email : String
     , name : String
     , permissions : List String
+    , unverifiedProfiles : List String
     }
 
 -- SERIALIZATION
@@ -27,3 +28,4 @@ decoder =
         |> required "email" Decode.string
         |> required "name" Decode.string
         |> optional "permissions" (Decode.list Decode.string) []
+        |> optional "unverified_profiles" (Decode.list Decode.string) []
